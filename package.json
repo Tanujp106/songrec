@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run dev:web & npm run dev:api",
+    "dev:api": "PORT=3001 next dev",
+    "dev:web": "npm run dev --prefix frontend -- --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

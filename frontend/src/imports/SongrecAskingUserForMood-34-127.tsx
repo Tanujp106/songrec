@@ -1,5 +1,5 @@
 import svgPaths from "./svg-iturtluduq";
-import imgImage21 from "figma:asset/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
+import imgImage21 from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 
 function LinearGradientNoiseTexture() {
   return <div className="absolute h-[874px] left-[-24px] top-[-40px] w-[402px]" data-name="Linear Gradient + Noise Texture" style={{ backgroundImage: "linear-gradient(178.465deg, rgb(74, 48, 240) 65.629%, rgba(74, 48, 240, 0.4) 99.391%)" }} />;

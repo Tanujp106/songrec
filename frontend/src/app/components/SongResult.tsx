@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
-import imgAlbum from "figma:asset/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
+import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
 
 const POPULARITY_LABELS = ["underrated", "moderate", "well-known", "popular"];

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import imgAlbum from "figma:asset/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
+import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 
 interface LoadingScreenProps {
   mood: string;
