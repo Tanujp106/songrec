@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { spotifyGet } from "@/lib/spotify";
 import {
   chunkArray,
@@ -186,6 +186,7 @@ async function fetchAlbumsBatch(
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     const logProgress =
       searchParams.get("progress") === "1" ||

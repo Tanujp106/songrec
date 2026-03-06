@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { ALLOWED_MOODS, clamp, pickWeightedRandom } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -19,6 +19,7 @@ type SongRow = {
 };
 
 export async function GET(request: Request) {
+  const supabase = getSupabaseClient();
   const { searchParams } = new URL(request.url);
   const mood = searchParams.get("mood")?.trim().toLowerCase();
   const sliderValue = Number(searchParams.get("sliderValue"));

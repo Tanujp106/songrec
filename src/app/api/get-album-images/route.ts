@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import { ALLOWED_MOODS } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -14,6 +14,7 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 export async function GET(request: Request) {
+  const supabase = getSupabaseClient();
   const { searchParams } = new URL(request.url);
   const mood = searchParams.get("mood")?.trim().toLowerCase();
   const limitParam = Number(searchParams.get("limit"));
