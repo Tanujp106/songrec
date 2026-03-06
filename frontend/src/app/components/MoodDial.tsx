@@ -42,9 +42,14 @@ const MOODS = [
 interface MoodPickerProps {
   onMoodConfirmed?: (moodName: string | null) => void;
   accentColor?: string;
+  selectedMood?: string | null;
 }
 
-export function MoodPicker({ onMoodConfirmed, accentColor = "#4A30F0" }: MoodPickerProps) {
+export function MoodPicker({
+  onMoodConfirmed,
+  accentColor = "#4A30F0",
+  selectedMood = null
+}: MoodPickerProps) {
   const [selectedMoodIndex, setSelectedMoodIndex] = useState(3);
   const [isDragging, setIsDragging] = useState(false);
   const [hasPicked, setHasPicked] = useState(false);
@@ -62,6 +67,27 @@ export function MoodPicker({ onMoodConfirmed, accentColor = "#4A30F0" }: MoodPic
 
   const activeMood = MOODS[selectedMoodIndex];
   const showTabs = isDragging || !hasPicked;
+
+  useEffect(() => {
+    if (!selectedMood) {
+      setHasPicked(false);
+      return;
+    }
+    const idx = MOODS.findIndex((mood) => mood.name === selectedMood);
+    if (idx >= 0) {
+      setSelectedMoodIndex(idx);
+      setHasPicked(true);
+    }
+  }, [selectedMood]);
+
+  // Auto-cycle doodle when no mood has been picked.
+  useEffect(() => {
+    if (hasPicked || isDragging) return;
+    const interval = setInterval(() => {
+      setSelectedMoodIndex((prev) => (prev + 1) % MOODS.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [hasPicked, isDragging]);
 
   // Speedometer intro: reveal tabs one-by-one with staggered timers
   useEffect(() => {
@@ -315,13 +341,13 @@ export function MoodPicker({ onMoodConfirmed, accentColor = "#4A30F0" }: MoodPic
           ) : (
             <motion.span
               key="__initial__"
-              className="font-['Spectral',serif] text-[24px] text-white/40 tracking-[0.24px] italic"
+              className="font-['Spectral',serif] text-[24px] text-white/40 tracking-[0.24px]"
               initial={{ opacity: 0, filter: "blur(6px)" }}
               animate={{ opacity: 1, filter: "blur(0px)" }}
               exit={{ opacity: 0, filter: "blur(6px)" }}
               transition={{ duration: 0.12, ease: "easeOut" }}
             >
-              pick a mood
+              Drag & pick a mood
             </motion.span>
           )}
         </AnimatePresence>

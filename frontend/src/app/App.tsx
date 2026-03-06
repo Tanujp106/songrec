@@ -1,13 +1,17 @@
-import React, { useState, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import React, { useState, useCallback, useEffect } from "react";
+import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import { MoodPicker, MOOD_COLORS } from "./components/MoodDial";
 import { PopularitySlider } from "./components/PopularitySlider";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { SongResult } from "./components/SongResult";
-import { fetchRecommendation, type SongRecommendation } from "./lib/api";
+import {
+  fetchMoodImages,
+  fetchRecommendation,
+  type SongRecommendation
+} from "./lib/api";
+import { Agentation } from "agentation";
 
-const DEFAULT_FROM = "#4A30F0";
-const DEFAULT_TO = "#ffffff";
+const DEFAULT_FROM = "#5A54F2";
 
 type Screen = "mood" | "loading" | "result";
 
@@ -36,6 +40,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("mood");
   const [song, setSong] = useState<SongRecommendation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [freezeMarquee, setFreezeMarquee] = useState(false);
+  const [albumImagesMood, setAlbumImagesMood] = useState<string | null>(null);
 
   const handleMoodConfirmed = useCallback((moodName: string | null) => {
     setConfirmedMood(moodName);
@@ -43,44 +49,85 @@ export default function App() {
 
   const colors = confirmedMood && MOOD_COLORS[confirmedMood]
     ? MOOD_COLORS[confirmedMood]
-    : { from: DEFAULT_FROM, to: DEFAULT_TO };
+    : { from: DEFAULT_FROM, to: DEFAULT_FROM };
 
   // Popularity 0 (underrated) → slightly lighter, 3 (popular) → full saturated color
   const brightnessFactor = 1.2 - (popularity / 3) * 0.2;
   const accentColor = adjustBrightness(colors.from, brightnessFactor);
   const bgFromColor = adjustBrightness(colors.from, brightnessFactor);
+  const bgToColor = adjustBrightness(colors.from, brightnessFactor + 0.22);
 
   // Unique key per mood so AnimatePresence crossfades between moods
   const bgKey = confirmedMood ?? "__default__";
 
+  const [albumImages, setAlbumImages] = useState<string[]>([]);
+
+  const preloadImages = useCallback(async (mood: string) => {
+    const images = await fetchMoodImages(mood, 200);
+    if (images.length === 0) {
+      setAlbumImages([]);
+      setAlbumImagesMood(mood);
+      return [];
+    }
+    images.forEach((src) => {
+      const img = new Image();
+      img.src = src;
+    });
+    setAlbumImages(images);
+    setAlbumImagesMood(mood);
+    return images;
+  }, []);
+
+  useEffect(() => {
+    if (!confirmedMood) return;
+    if (albumImagesMood === confirmedMood) return;
+    preloadImages(confirmedMood).catch(() => undefined);
+  }, [confirmedMood, albumImagesMood, preloadImages]);
+
   const handleRecommend = useCallback(async () => {
-    const mood = confirmedMood ?? "indie";
+    if (!confirmedMood) return;
+    const mood = confirmedMood;
     const sliderValue = Math.round((popularity / 3) * 100);
     setError(null);
     setSong(null);
     setScreen("loading");
+    setFreezeMarquee(false);
 
     try {
+      const minDelay = new Promise((resolve) => setTimeout(resolve, 3500));
+      const imagesPromise =
+        albumImagesMood === mood && albumImages.length > 0
+          ? Promise.resolve(albumImages)
+          : preloadImages(mood);
+
       const result = await fetchRecommendation(mood, sliderValue);
       setSong(result);
+      await Promise.all([minDelay, imagesPromise]);
+      setFreezeMarquee(true);
+      await new Promise((resolve) => setTimeout(resolve, 150));
       setScreen("result");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch song.";
       setError(message);
+      await new Promise((resolve) => setTimeout(resolve, 3200));
+      setFreezeMarquee(true);
+      await new Promise((resolve) => setTimeout(resolve, 150));
       setScreen("result");
     }
-  }, [confirmedMood, popularity]);
+  }, [confirmedMood, popularity, albumImagesMood, albumImages, preloadImages]);
 
   const handleStartOver = () => {
     setScreen("mood");
-    setConfirmedMood(null);
-    setPopularity(0);
     setSong(null);
     setError(null);
+    setAlbumImages([]);
+    setAlbumImagesMood(null);
+    setFreezeMarquee(false);
   };
 
   return (
     <div className="relative min-h-screen overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]">
+      {import.meta.env.DEV ? <Agentation /> : null}
 
       {/* Background gradient layers — crossfade between moods */}
       <AnimatePresence>
@@ -95,10 +142,10 @@ export default function App() {
       </AnimatePresence>
 
       {/* Live background that responds to slider brightness */}
-      <motion.div
-        className="absolute inset-0"
-        animate={{
-          background: `linear-gradient(to bottom, ${bgFromColor}, ${colors.to})`,
+        <motion.div
+          className="absolute inset-0"
+          animate={{
+          background: `linear-gradient(to bottom, ${bgFromColor}, ${bgToColor})`,
         }}
         transition={{ duration: 0.5, ease: "easeInOut" }}
       />
@@ -110,7 +157,7 @@ export default function App() {
       />
       
       {/* Main Container */}
-      <main className="relative z-10 w-full max-w-[400px] min-h-[100dvh] flex flex-col items-center justify-between px-6 py-6 mx-auto">
+      <main className="relative z-10 w-full min-h-[100dvh] flex flex-col items-center justify-between px-6 py-6">
         
         {/* Header — always visible */}
         <header className="w-full flex justify-between items-center text-white/90 font-['Spectral',serif] text-[18px] tracking-wide mt-1 shrink-0">
@@ -119,73 +166,97 @@ export default function App() {
         </header>
 
         {/* Screen content with crossfade transitions */}
-        <AnimatePresence mode="wait">
-          {screen === "mood" && (
-            <motion.div
-              key="mood-screen"
-              className="flex-1 flex flex-col items-center justify-between w-full"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.6, ease: "easeInOut" }}
-            >
-              {/* Content Area */}
-              <div className="flex-1 flex flex-col items-center justify-center w-full mx-[0px] mt-[16px] mb-[0px]">
-                <MoodPicker onMoodConfirmed={handleMoodConfirmed} accentColor={accentColor} />
-              </div>
-
-              {/* Bottom Controls */}
-              <div className="w-full flex flex-col items-center gap-4 mt-4 mb-2">
-                <PopularitySlider accentColor={accentColor} onValueChange={setPopularity} />
-                
-                <motion.button
-                  className="w-full text-white text-[18px] font-medium py-[14px] rounded-full transition-shadow duration-300 active:scale-[0.98] cursor-pointer"
-                  animate={{
-                    backgroundColor: accentColor,
-                    boxShadow: `0 4px 12px ${accentColor}4D`,
-                  }}
-                  transition={{ duration: 0.8, ease: "easeInOut" }}
-                  onClick={handleRecommend}
+        <LayoutGroup>
+          <div className="relative flex-1 w-full">
+            <AnimatePresence mode="sync">
+              {screen === "mood" && (
+                <motion.div
+                  key="mood-screen"
+                  className="absolute inset-0 flex flex-col items-center justify-between w-full"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
                 >
-                  Recommend
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
+                  <div className="w-full max-w-[400px] mx-auto flex flex-col items-center justify-between flex-1">
+                    {/* Content Area */}
+                    <div className="flex-1 flex flex-col items-center justify-center w-full mx-[0px] mt-[16px] mb-[0px]">
+                      <MoodPicker
+                        onMoodConfirmed={handleMoodConfirmed}
+                        accentColor={accentColor}
+                        selectedMood={confirmedMood}
+                      />
+                    </div>
 
-          {screen === "loading" && (
-            <motion.div
-              key="loading-screen"
-              className="flex-1 flex flex-col items-center justify-center w-full"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.6, ease: "easeInOut" }}
-            >
-              <LoadingScreen mood={confirmedMood || "indie"} popularity={String(popularity)} />
-            </motion.div>
-          )}
+                    {/* Bottom Controls */}
+                    <div className="w-full flex flex-col items-center gap-4 mt-4 mb-2">
+                      <PopularitySlider accentColor={accentColor} onValueChange={setPopularity} />
+                      
+                      <motion.button
+                        className="w-full text-white text-[18px] font-medium py-[14px] rounded-full transition-shadow duration-300 active:scale-[0.98] cursor-pointer"
+                        animate={{
+                          backgroundColor: accentColor,
+                          boxShadow: `0 4px 12px ${accentColor}4D`,
+                        }}
+                        transition={{ duration: 0.8, ease: "easeInOut" }}
+                        onClick={handleRecommend}
+                        disabled={!confirmedMood}
+                        aria-disabled={!confirmedMood}
+                        style={{
+                          opacity: confirmedMood ? 1 : 0.55,
+                          cursor: confirmedMood ? "pointer" : "not-allowed"
+                        }}
+                      >
+                        Recommend
+                      </motion.button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
 
-          {screen === "result" && (
-            <motion.div
-              key="result-screen"
-              className="flex-1 flex flex-col items-center justify-between w-full"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.6, ease: "easeInOut" }}
-            >
-              <SongResult
-                mood={confirmedMood || "indie"}
-                popularity={popularity}
-                accentColor={accentColor}
-                onStartOver={handleStartOver}
-                song={song}
-                error={error}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+              {screen === "loading" && (
+                <motion.div
+                  key="loading-screen"
+                  className="absolute inset-0 flex flex-col items-center w-full"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                >
+                  <LoadingScreen
+                    mood={confirmedMood || "indie"}
+                    popularity={String(popularity)}
+                    images={albumImages}
+                    highlightImageUrl={song?.album_image ?? null}
+                    freezeMotion={freezeMarquee}
+                  />
+                </motion.div>
+              )}
+
+              {screen === "result" && (
+                <motion.div
+                  key="result-screen"
+                  className="absolute inset-0 flex flex-col items-center justify-between w-full"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                >
+                  <div className="w-full max-w-[400px] mx-auto flex flex-col items-center justify-between flex-1">
+                    <SongResult
+                      mood={confirmedMood || "indie"}
+                      popularity={popularity}
+                      accentColor={accentColor}
+                      onStartOver={handleStartOver}
+                      song={song}
+                      error={error}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </LayoutGroup>
 
       </main>
     </div>

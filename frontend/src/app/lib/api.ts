@@ -35,3 +35,26 @@ export async function fetchRecommendation(
 
   return data as SongRecommendation;
 }
+
+export async function fetchMoodImages(
+  mood: string,
+  limit = 24
+): Promise<string[]> {
+  const base = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+  const url = `${base}/api/get-album-images?mood=${encodeURIComponent(
+    mood
+  )}&limit=${encodeURIComponent(String(limit))}`;
+
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+    cache: "no-store"
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return [];
+  }
+
+  const images = Array.isArray(data?.images) ? data.images : [];
+  return images.filter((img) => typeof img === "string");
+}

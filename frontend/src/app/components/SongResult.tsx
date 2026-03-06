@@ -32,7 +32,7 @@ export function SongResult({
   const hasError = !!error;
 
   return (
-    <div className="w-full flex flex-col items-center justify-between flex-1">
+    <div className="w-full flex flex-col items-center justify-between flex-1 pt-[80px]">
       {/* Top content */}
       <div className="flex flex-col items-center gap-[32px] w-full mt-4">
         {/* Description text */}
@@ -63,16 +63,22 @@ export function SongResult({
         {/* Album art */}
         <motion.div
           className="w-full"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
           <div className="relative w-full aspect-square max-h-[354px] rounded-[32px] shadow-[0px_9px_14px_0px_rgba(19,15,41,0.5)] overflow-hidden">
-            <img
-              alt={album}
-              className="absolute inset-0 max-w-none object-cover rounded-[32px] size-full"
-              src={albumImage}
-            />
+            <motion.div
+              className="absolute inset-0"
+              layoutId="song-album"
+              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+            >
+              <img
+                alt={album}
+                className="absolute inset-0 max-w-none object-cover rounded-[32px] size-full"
+                src={albumImage}
+              />
+            </motion.div>
             <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0px_12px_8px_0px_rgba(0,0,0,0.25)]" />
           </div>
         </motion.div>

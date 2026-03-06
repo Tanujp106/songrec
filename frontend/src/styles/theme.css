@@ -179,3 +179,29 @@
     line-height: 1.5;
   }
 }
+
+@keyframes marquee-left {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes marquee-right {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(0%);
+  }
+}
+
+.marquee-left {
+  animation: marquee-left var(--marquee-duration, 22s) linear infinite;
+}
+
+.marquee-right {
+  animation: marquee-right var(--marquee-duration, 22s) linear infinite;
+}

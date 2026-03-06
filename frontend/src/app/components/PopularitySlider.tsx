@@ -58,7 +58,7 @@ export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: Pop
         onPointerUp={handlePointerUp}
       >
         {/* Track Background */}
-        <div className="absolute inset-x-0 h-[36px] bg-white/30 rounded-[18px] border border-white" />
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[36px] bg-white/30 rounded-[18px] border border-white" />
 
         {/* Dots */}
         {[0, 1, 2, 3].map((step) => (
@@ -67,7 +67,7 @@ export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: Pop
             className="absolute top-1/2 -translate-y-1/2 w-[4px] h-[4px] rounded-full z-10"
             animate={{ backgroundColor: accentColor }}
             transition={{ duration: 0.8, ease: "easeInOut" }}
-            style={{ left: `${paddedLeft(step)}%`, transform: "translate(-50%, -50%)" }}
+            style={{ left: `${paddedLeft(step)}%`, transform: "translateX(-50%)" }}
           />
         ))}
 
@@ -76,7 +76,7 @@ export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: Pop
           className="absolute top-1/2 -translate-y-1/2 w-[22px] h-[22px] rounded-full z-20 shadow-[0_2px_8px_rgba(0,0,0,0.25)] flex items-center justify-center"
           initial={false}
           animate={{ left: `${paddedLeft(value)}%`, backgroundColor: accentColor }}
-          style={{ transform: "translate(-50%, -50%)" }}
+          style={{ transform: "translateX(-50%)" }}
           transition={{ type: "spring", stiffness: 400, damping: 30 }}
         />
       </div>
