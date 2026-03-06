@@ -13,20 +13,6 @@ export function extractPlaylistId(input: string): string | null {
   return null;
 }
 
-export function extractTrackId(input: string): string | null {
-  const trimmed = input.trim();
-
-  const urlMatch = trimmed.match(/track\/([a-zA-Z0-9]+)(\?.*)?$/);
-  if (urlMatch) return urlMatch[1];
-
-  const uriMatch = trimmed.match(/^spotify:track:([a-zA-Z0-9]+)$/);
-  if (uriMatch) return uriMatch[1];
-
-  const idMatch = trimmed.match(/^[a-zA-Z0-9]{10,}$/);
-  if (idMatch) return trimmed;
-
-  return null;
-}
 
 export function normalizeMoodArray(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -63,26 +49,6 @@ export function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-export async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let nextIndex = 0;
-
-  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
-    while (true) {
-      const index = nextIndex;
-      nextIndex += 1;
-      if (index >= items.length) return;
-      results[index] = await fn(items[index]);
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
-}
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);

@@ -8,7 +8,6 @@ import {
   normalizeMoodArray,
   filterAllowedMoods
 } from "@/lib/utils";
-import { getClientIp, rateLimit } from "@/lib/rate-limit";
 import { jsonError, parseJson } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -65,12 +64,7 @@ async function fetchPlaylistTracks(
 ): Promise<SpotifyTrackItem[]> {
   const items: SpotifyTrackItem[] = [];
   const marketEnv = (process.env.SPOTIFY_MARKET ?? "").trim();
-  const market =
-    marketEnv.length > 0
-      ? marketEnv
-      : process.env.SPOTIFY_REFRESH_TOKEN
-        ? "from_token"
-        : "US";
+  const market = marketEnv.length > 0 ? marketEnv : "US";
 
   const trackFields =
     "id,name,artists(name),album(id,name,images),external_urls(spotify),popularity,is_local,duration_ms";
@@ -99,7 +93,7 @@ async function fetchPlaylistTracks(
         log?.(`Fetching playlist page ${page}...`);
         const data = await spotifyGet<
           SpotifyPlaylistTracksResponse | SpotifyPlaylistItemsResponse
-        >(url, { auth: "auto" });
+        >(url);
         items.push(...(((data as any).items ?? []) as SpotifyTrackItem[]));
         url = ((data as any).next ?? "") as string;
       }
@@ -133,23 +127,12 @@ type SpotifyAlbumResponse = {
   release_date_precision?: string;
 };
 
-type SpotifyPlaylistMeta = {
-  id: string;
-  name: string;
-  external_urls?: { spotify?: string };
-};
-
 async function fetchTracksBatch(
   trackIds: string[],
   log?: (message: string) => void
 ): Promise<Map<string, SpotifyTrackResponse>> {
   const marketEnv = (process.env.SPOTIFY_MARKET ?? "").trim();
-  const market =
-    marketEnv.length > 0
-      ? marketEnv
-      : process.env.SPOTIFY_REFRESH_TOKEN
-        ? "from_token"
-        : "US";
+  const market = marketEnv.length > 0 ? marketEnv : "US";
   const chunks = chunkArray(trackIds, 50);
   const results = new Map<string, SpotifyTrackResponse>();
 
@@ -158,9 +141,7 @@ async function fetchTracksBatch(
       market
     )}&ids=${chunk.join(",")}`;
     try {
-      const data = await spotifyGet<{ tracks: SpotifyTrackResponse[] }>(url, {
-        auth: "auto"
-      });
+      const data = await spotifyGet<{ tracks: SpotifyTrackResponse[] }>(url);
       for (const track of data.tracks ?? []) {
         if (track?.id) results.set(track.id, track);
       }
@@ -180,12 +161,7 @@ async function fetchAlbumsBatch(
   log?: (message: string) => void
 ): Promise<Map<string, SpotifyAlbumResponse>> {
   const marketEnv = (process.env.SPOTIFY_MARKET ?? "").trim();
-  const market =
-    marketEnv.length > 0
-      ? marketEnv
-      : process.env.SPOTIFY_REFRESH_TOKEN
-        ? "from_token"
-        : "US";
+  const market = marketEnv.length > 0 ? marketEnv : "US";
   const chunks = chunkArray(albumIds, 20);
   const results = new Map<string, SpotifyAlbumResponse>();
 
@@ -194,9 +170,7 @@ async function fetchAlbumsBatch(
       market
     )}&ids=${chunk.join(",")}`;
     try {
-      const data = await spotifyGet<{ albums: SpotifyAlbumResponse[] }>(url, {
-        auth: "auto"
-      });
+      const data = await spotifyGet<{ albums: SpotifyAlbumResponse[] }>(url);
       for (const album of data.albums ?? []) {
         if (album?.id) results.set(album.id, album);
       }
@@ -217,14 +191,6 @@ export async function POST(request: Request) {
       searchParams.get("progress") === "1" ||
       process.env.IMPORT_LOG_PROGRESS === "1";
     const log = logProgress ? (message: string) => console.log(message) : null;
-
-    const ip = getClientIp(request);
-    const rl = rateLimit(`import-playlist:${ip}`, 10, 60_000);
-    if (!rl.allowed) {
-      return jsonError("Rate limit exceeded. Try again later.", 429, {
-        resetAt: rl.resetAt
-      });
-    }
 
     const body = await parseJson(request);
     const playlistUrl = body?.playlist_url;
@@ -251,13 +217,8 @@ export async function POST(request: Request) {
     }
 
     let playlistItems: SpotifyTrackItem[];
-    let playlistMeta: SpotifyPlaylistMeta | null = null;
     try {
       log?.(`Starting import for playlist ${playlistId}`);
-      playlistMeta = await spotifyGet<SpotifyPlaylistMeta>(
-        `https://api.spotify.com/v1/playlists/${playlistId}?fields=id,name,external_urls(spotify)`,
-        { auth: "auto" }
-      );
       playlistItems = await fetchPlaylistTracks(playlistId, log ?? undefined);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -431,50 +392,6 @@ export async function POST(request: Request) {
     ).length;
     const imported = finalRecords.length - updated;
     log?.(`Done. Imported ${imported}, updated ${updated}, skipped ${skipped}.`);
-
-    // If playlist metadata table exists, upsert playlist and link songs.
-    if (playlistMeta?.id && playlistMeta?.name) {
-      const { data: playlistRow, error: playlistError } = await supabase
-        .from("playlists")
-        .upsert(
-          {
-            spotify_playlist_id: playlistMeta.id,
-            playlist_name: playlistMeta.name,
-            spotify_url: playlistMeta.external_urls?.spotify ?? null
-          },
-          { onConflict: "spotify_playlist_id" }
-        )
-        .select("id")
-        .single();
-
-      if (!playlistError && playlistRow?.id) {
-        const trackIds = finalRecords.map((r) => r.spotify_track_id);
-        const songIdMap = new Map<string, string>();
-        const trackIdChunks = chunkArray(trackIds, 200);
-        for (const chunk of trackIdChunks) {
-          const { data, error } = await supabase
-            .from("songs")
-            .select("id, spotify_track_id")
-            .in("spotify_track_id", chunk);
-
-          if (error) break;
-          data?.forEach((row) => {
-            songIdMap.set(row.spotify_track_id, row.id);
-          });
-        }
-
-        const joinRows = Array.from(songIdMap.values()).map((songId) => ({
-          playlist_id: playlistRow.id,
-          song_id: songId
-        }));
-
-        if (joinRows.length > 0) {
-          await supabase
-            .from("playlist_songs")
-            .upsert(joinRows, { onConflict: "playlist_id,song_id" });
-        }
-      }
-    }
 
     return NextResponse.json({
       playlist_id: playlistId,
