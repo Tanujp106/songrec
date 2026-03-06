@@ -48,8 +48,9 @@ export async function GET(request: Request) {
     );
   }
 
+  const rows = (data ?? []) as { album_image: string | null }[];
   const images = Array.from(
-    new Set((data ?? []).map((row) => row.album_image).filter(Boolean))
+    new Set(rows.map((row) => row.album_image).filter(Boolean))
   ) as string[];
 
   const shuffled = shuffle(images);
