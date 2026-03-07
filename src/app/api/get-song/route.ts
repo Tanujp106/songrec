@@ -73,7 +73,8 @@ export async function GET(request: Request) {
     );
   }
 
-  const selected = pickWeightedRandom(data, clamp(sliderValue, 0, 100));
+  const rows = (data ?? []) as SongRow[];
+  const selected = pickWeightedRandom(rows, clamp(sliderValue, 0, 100));
 
   const result: SongRow = {
     song_name: selected.song_name,

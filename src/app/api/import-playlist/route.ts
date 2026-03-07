@@ -361,7 +361,11 @@ export async function POST(request: Request) {
         return jsonError(`Supabase select failed: ${error.message}`, 500);
       }
 
-      data?.forEach((row) => {
+      const rows = (data ?? []) as {
+        spotify_track_id: string;
+        moods: string[] | null;
+      }[];
+      rows.forEach((row) => {
         existingMap.set(row.spotify_track_id, row.moods ?? []);
       });
     }
@@ -381,7 +385,7 @@ export async function POST(request: Request) {
       log?.(`Upserting ${chunk.length} records...`);
       const { error } = await supabase
         .from("songs")
-        .upsert(chunk, { onConflict: "spotify_track_id" });
+        .upsert(chunk as any, { onConflict: "spotify_track_id" });
 
       if (error) {
         return jsonError(`Supabase upsert failed: ${error.message}`, 500);
