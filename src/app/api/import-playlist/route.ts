@@ -9,8 +9,20 @@ import {
   filterAllowedMoods
 } from "@/lib/utils";
 import { jsonError, parseJson } from "@/lib/http";
+import { corsHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
+
+function jsonWithCors(body: unknown, init?: ResponseInit) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), ...corsHeaders() }
+  });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+}
 
 type SpotifyTrackObject = {
   id: string | null;
@@ -200,18 +212,24 @@ export async function POST(request: Request) {
     const overwriteMoods = body?.overwrite_moods === true;
 
     if (typeof playlistUrl !== "string") {
-      return jsonError("playlist_url (string) is required.", 400);
+      return jsonWithCors(
+        { error: "playlist_url (string) is required." },
+        { status: 400 }
+      );
     }
     if (overwriteMoods && moods.length === 0) {
-      return jsonError(
-        "overwrite_moods=true requires a non-empty moods array in the request body.",
-        400
+      return jsonWithCors(
+        {
+          error:
+            "overwrite_moods=true requires a non-empty moods array in the request body."
+        },
+        { status: 400 }
       );
     }
 
     const playlistId = extractPlaylistId(playlistUrl);
     if (!playlistId) {
-      return NextResponse.json(
+      return jsonWithCors(
         { error: "Invalid playlist_url. Could not extract playlist ID." },
         { status: 400 }
       );
@@ -224,13 +242,16 @@ export async function POST(request: Request) {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       if (message.includes("(403)")) {
-        return jsonError(
-          "Spotify returned 403 Forbidden for this playlist. If you configured OAuth for import (Authorization Code Flow), set SPOTIFY_REFRESH_TOKEN and retry. Otherwise this playlist likely requires user context and cannot be imported with Client Credentials alone.",
-          403,
-          message
+        return jsonWithCors(
+          {
+            error:
+              "Spotify returned 403 Forbidden for this playlist. If you configured OAuth for import (Authorization Code Flow), set SPOTIFY_REFRESH_TOKEN and retry. Otherwise this playlist likely requires user context and cannot be imported with Client Credentials alone.",
+            details: message
+          },
+          { status: 403 }
         );
       }
-      return jsonError(message, 500);
+      return jsonWithCors({ error: message }, { status: 500 });
     }
 
     const recordMap = new Map<string, SongInsert>();
@@ -339,9 +360,10 @@ export async function POST(request: Request) {
       });
     }
     if (records.length === 0) {
-      return jsonError("No valid tracks found in playlist.", 400, {
-        skipped
-      });
+      return jsonWithCors(
+        { error: "No valid tracks found in playlist.", skipped },
+        { status: 400 }
+      );
     }
 
     const existingMap = new Map<string, string[]>();
@@ -358,7 +380,10 @@ export async function POST(request: Request) {
         .in("spotify_track_id", chunk);
 
       if (error) {
-        return jsonError(`Supabase select failed: ${error.message}`, 500);
+        return jsonWithCors(
+          { error: `Supabase select failed: ${error.message}` },
+          { status: 500 }
+        );
       }
 
       const rows = (data ?? []) as {
@@ -388,7 +413,10 @@ export async function POST(request: Request) {
         .upsert(chunk as any, { onConflict: "spotify_track_id" });
 
       if (error) {
-        return jsonError(`Supabase upsert failed: ${error.message}`, 500);
+        return jsonWithCors(
+          { error: `Supabase upsert failed: ${error.message}` },
+          { status: 500 }
+        );
       }
     }
 
@@ -398,7 +426,7 @@ export async function POST(request: Request) {
     const imported = finalRecords.length - updated;
     log?.(`Done. Imported ${imported}, updated ${updated}, skipped ${skipped}.`);
 
-    return NextResponse.json({
+    return jsonWithCors({
       playlist_id: playlistId,
       imported,
       updated,
@@ -407,6 +435,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return jsonError(message, 500);
+    return jsonWithCors({ error: message }, { status: 500 });
   }
 }

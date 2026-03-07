@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
 import { ALLOWED_MOODS } from "@/lib/utils";
+import { corsHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
+
+function jsonWithCors(body: unknown, init?: ResponseInit) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), ...corsHeaders() }
+  });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+}
 
 function shuffle<T>(items: T[]): T[] {
   const arr = [...items];
@@ -21,14 +33,14 @@ export async function GET(request: Request) {
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 200) : 24;
 
   if (!mood) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: "mood query param is required" },
       { status: 400 }
     );
   }
 
   if (!ALLOWED_MOODS.has(mood)) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: "mood must be one of the allowed values" },
       { status: 400 }
     );
@@ -42,7 +54,7 @@ export async function GET(request: Request) {
     .limit(400);
 
   if (error) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: `Supabase query failed: ${error.message}` },
       { status: 500 }
     );
@@ -54,5 +66,5 @@ export async function GET(request: Request) {
   ) as string[];
 
   const shuffled = shuffle(images);
-  return NextResponse.json({ images: shuffled.slice(0, limit) });
+  return jsonWithCors({ images: shuffled.slice(0, limit) });
 }

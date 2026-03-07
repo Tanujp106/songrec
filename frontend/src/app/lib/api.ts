@@ -16,7 +16,9 @@ export async function fetchRecommendation(
   mood: string,
   sliderValue: number
 ): Promise<SongRecommendation> {
-  const base = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+  const base =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+    "http://localhost:3001";
   const url = `${base}/api/get-song?mood=${encodeURIComponent(
     mood
   )}&sliderValue=${encodeURIComponent(String(sliderValue))}`;
@@ -40,7 +42,9 @@ export async function fetchMoodImages(
   mood: string,
   limit = 24
 ): Promise<string[]> {
-  const base = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+  const base =
+    (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+    "http://localhost:3001";
   const url = `${base}/api/get-album-images?mood=${encodeURIComponent(
     mood
   )}&limit=${encodeURIComponent(String(limit))}`;

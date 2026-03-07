@@ -1,8 +1,20 @@
 import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
 import { ALLOWED_MOODS, clamp, pickWeightedRandom } from "@/lib/utils";
+import { corsHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
+
+function jsonWithCors(body: unknown, init?: ResponseInit) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), ...corsHeaders() }
+  });
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+}
 
 type SongRow = {
   song_name: string;
@@ -25,28 +37,28 @@ export async function GET(request: Request) {
   const sliderValue = Number(searchParams.get("sliderValue"));
 
   if (!mood) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: "mood query param is required" },
       { status: 400 }
     );
   }
 
   if (!ALLOWED_MOODS.has(mood)) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: "mood must be one of the allowed values" },
       { status: 400 }
     );
   }
 
   if (!Number.isFinite(sliderValue)) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: "sliderValue query param must be a number (0-100)" },
       { status: 400 }
     );
   }
 
   if (sliderValue < 0 || sliderValue > 100) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: "sliderValue must be between 0 and 100" },
       { status: 400 }
     );
@@ -60,14 +72,14 @@ export async function GET(request: Request) {
     .contains("moods", [mood]);
 
   if (error) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: `Supabase query failed: ${error.message}` },
       { status: 500 }
     );
   }
 
   if (!data || data.length === 0) {
-    return NextResponse.json(
+    return jsonWithCors(
       { error: "No songs found for this mood." },
       { status: 404 }
     );
@@ -90,5 +102,5 @@ export async function GET(request: Request) {
     release_date_precision: selected.release_date_precision ?? null
   };
 
-  return NextResponse.json(result);
+  return jsonWithCors(result);
 }
