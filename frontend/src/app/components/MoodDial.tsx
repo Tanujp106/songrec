@@ -335,8 +335,14 @@ export function MoodPicker({
       boxShadow: { ...pullSpring, duration: dial.shadowTransitionDuration },
     };
 
+  const sizeVars = {
+    "--dial-size": "clamp(220px, 64vw, 280px)",
+    "--face-size": "clamp(150px, 44vw, 190px)",
+    "--glow-size": "clamp(180px, 52vw, 220px)",
+  } as React.CSSProperties;
+
   return (
-    <div className="flex flex-col gap-2 sm:gap-4 items-center relative w-full mt-2">
+    <div className="flex flex-col gap-8 items-center relative w-full mt-2" style={sizeVars}>
       <p className="font-['Spectral',serif] text-[24px] sm:text-[26px] text-center text-white w-72 leading-[1.2]">
         What would you want to listen twin?
       </p>
@@ -344,7 +350,8 @@ export function MoodPicker({
       {/* Dial & Face Container */}
       <div
         ref={dialRef}
-        className="relative w-[240px] h-[240px] sm:w-[280px] sm:h-[280px] flex items-center justify-center mt-0 touch-none cursor-pointer"
+        className="relative flex items-center justify-center mt-0 touch-none cursor-pointer"
+        style={{ width: "var(--dial-size)", height: "var(--dial-size)" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -431,8 +438,8 @@ export function MoodPicker({
         <motion.div
           className="absolute rounded-full pointer-events-none"
           style={{
-            width: 220,
-            height: 220,
+            width: "var(--glow-size)",
+            height: "var(--glow-size)",
             background: "radial-gradient(circle, rgba(255,255,255,0.6) 0%, rgba(200,180,255,0.4) 40%, transparent 70%)",
           }}
           initial={{ opacity: 0, scale: dial.glowInitialScale }}
@@ -467,8 +474,10 @@ export function MoodPicker({
               duration: dial.scaleTransitionDuration,
             },
           }}
-          className="relative w-[160px] h-[160px] sm:w-[190px] sm:h-[190px] rounded-full flex items-center justify-center border-[5px] border-white overflow-hidden pointer-events-none"
+          className="relative rounded-full flex items-center justify-center border-[5px] border-white overflow-hidden pointer-events-none"
           style={{
+            width: "var(--face-size)",
+            height: "var(--face-size)",
             backgroundColor: isDragging ? "#DFDCFF" : "#EBE9FF",
             transition: "background-color 0.2s ease",
           }}

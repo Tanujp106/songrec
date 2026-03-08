@@ -88,8 +88,12 @@ export function SongResult({
         {/* Album art — morph target for layoutId transition */}
         <div className="w-full">
           <div
-            className="relative w-full aspect-square max-h-[min(354px,45svh)]"
-            style={{ borderRadius: morph.endRadius }}
+            className="relative w-full aspect-square mx-auto overflow-hidden shadow-[0px_9px_14px_0px_rgba(19,15,41,0.5)]"
+            style={{
+              maxWidth: "min(100%, 76vw)",
+              maxHeight: "min(320px, 36vh)",
+              borderRadius: morph.endRadius,
+            }}
           >
             <motion.div
               className="absolute inset-0 overflow-hidden"

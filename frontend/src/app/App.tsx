@@ -156,7 +156,10 @@ export default function App() {
   };
 
   return (
-    <div className="relative h-[100svh] max-h-[100svh] overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]">
+    <div
+      className="relative min-h-[100svh] overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]"
+      style={{ minHeight: "100dvh" }}
+    >
       {import.meta.env.DEV ? <Agentation /> : null}
 
       {/* Background gradient layers — crossfade between moods */}
@@ -181,7 +184,10 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="relative z-10 w-full h-[100svh] max-h-[100svh] flex flex-col items-center justify-between px-[24px] py-[40px] overflow-hidden gap-6">
+      <main
+        className="relative z-10 w-full min-h-[100svh] flex flex-col items-center justify-between px-[24px] pt-[calc(24px+env(safe-area-inset-top))] pb-[calc(24px+env(safe-area-inset-bottom))] overflow-hidden gap-6"
+        style={{ minHeight: "100dvh" }}
+      >
 
         {/* Header — always visible */}
         <header className="w-full flex justify-between items-center text-white/90 font-['Spectral',serif] text-[18px] tracking-wide shrink-0">

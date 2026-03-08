@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { toThumb } from "@/app/lib/api";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
@@ -20,9 +20,53 @@ interface LoadingScreenProps {
   };
 }
 
-const COLS = 7;
-const MAX_ROWS = 11;
-const MAX_TILES = COLS * MAX_ROWS;
+type PerfProfile = {
+  cols: number;
+  rows: number;
+  tileSize: number;
+  tileGap: number;
+  rowGap: number;
+  titleDelay: number;
+  titleDuration: number;
+  gridIntroDuration: number;
+  gridIntroBlur: number;
+  enableCycling: boolean;
+  cycleMs: number;
+  cycleBuckets: number;
+  heroSize: number;
+};
+
+const FULL_PROFILE: PerfProfile = {
+  cols: 7,
+  rows: 9,
+  tileSize: 56,
+  tileGap: 14,
+  rowGap: 10,
+  titleDelay: 0.15,
+  titleDuration: 0.5,
+  gridIntroDuration: 0.5,
+  gridIntroBlur: 2,
+  enableCycling: true,
+  cycleMs: 2200,
+  cycleBuckets: 4,
+  heroSize: 58,
+};
+
+const LITE_PROFILE: PerfProfile = {
+  cols: 5,
+  rows: 7,
+  tileSize: 46,
+  tileGap: 10,
+  rowGap: 8,
+  titleDelay: 0.08,
+  titleDuration: 0.35,
+  gridIntroDuration: 0.28,
+  gridIntroBlur: 0,
+  enableCycling: false,
+  cycleMs: 0,
+  cycleBuckets: 1,
+  heroSize: 50,
+};
 
 function hashString(input: string): number {
   let hash = 0;
@@ -32,16 +76,17 @@ function hashString(input: string): number {
   return Math.abs(hash);
 }
 
-/* ── B: ProgressiveImage — shows placeholder until image loads ── */
-function ProgressiveImage({
+const ProgressiveImage = React.memo(function ProgressiveImage({
   src,
-  alt = "",
+  alt,
   className,
+  loading = "eager",
   style,
 }: {
   src: string;
-  alt?: string;
+  alt: string;
   className?: string;
+  loading?: "eager" | "lazy";
   style?: React.CSSProperties;
 }) {
   const [loaded, setLoaded] = useState(false);
@@ -49,13 +94,11 @@ function ProgressiveImage({
   const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    // Check if already cached by the browser
     if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
       setLoaded(true);
     }
   }, [src]);
 
-  // Reset loaded state when src changes
   useEffect(() => {
     setLoaded(false);
     setCurrentSrc(src);
@@ -63,13 +106,12 @@ function ProgressiveImage({
 
   return (
     <>
-      {/* Placeholder — subtle shimmer until image loads */}
       {!loaded && (
         <div
           className="absolute inset-0 rounded-full"
           style={{
             background: "rgba(255,255,255,0.08)",
-            animation: "pulse 1.5s ease-in-out infinite",
+            animation: "pulse 1.6s ease-in-out infinite",
           }}
         />
       )}
@@ -78,7 +120,7 @@ function ProgressiveImage({
         alt={alt}
         className={className}
         src={currentSrc}
-        loading="eager"
+        loading={loading}
         decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => {
@@ -89,117 +131,13 @@ function ProgressiveImage({
         style={{
           ...style,
           opacity: loaded ? 1 : 0,
-          transition: "opacity 0.3s ease",
+          transition: "opacity 0.22s ease",
         }}
       />
     </>
   );
-}
+});
 
-/* ── CyclingTile — swaps image with blur-out / scale-in transition ── */
-function CyclingTile({
-  initialSrc,
-  imagePool,
-  startDelay,
-  introDelay,
-  config,
-}: {
-  initialSrc: string;
-  imagePool: string[];
-  startDelay: number;
-  introDelay: number;
-  config: {
-    cycleMin: number;
-    cycleJitter: number;
-    hideDuration: number;
-    showDuration: number;
-    hideScale: number;
-    showScale: number;
-    hideOpacity: number;
-    hideBlur: number;
-    showBlur: number;
-    swapDelay: number;
-    settleDelay: number;
-    introOpacity: number;
-    introScale: number;
-    introBlur: number;
-    introDuration: number;
-  };
-}) {
-  const [src, setSrc] = useState(initialSrc);
-  const [phase, setPhase] = useState<"intro" | "visible" | "hiding" | "showing">("intro");
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const innerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const doSwap = useCallback(() => {
-    setPhase("hiding");
-    // Swap image at peak blur (when hiding animation completes)
-    innerTimerRef.current = setTimeout(() => {
-      const next =
-        imagePool.length > 0
-          ? imagePool[Math.floor(Math.random() * imagePool.length)]
-          : initialSrc ?? imgAlbum;
-      setSrc(next);
-      setPhase("showing");
-      innerTimerRef.current = setTimeout(() => {
-        setPhase("visible");
-        // Schedule NEXT swap after cycleMin wait
-        const interval = config.cycleMin + Math.random() * config.cycleJitter;
-        timerRef.current = setTimeout(doSwap, interval);
-      }, config.settleDelay);
-    }, config.hideDuration * 1000);
-  }, [imagePool, config, initialSrc]);
-
-  // Transition from "intro" to "visible" after intro animation completes
-  useEffect(() => {
-    if (phase === "intro") {
-      const t = setTimeout(() => setPhase("visible"), (config.introDuration + introDelay) * 1000 + 50);
-      return () => clearTimeout(t);
-    }
-  }, [phase, config.introDuration, introDelay]);
-
-  useEffect(() => {
-    // startDelay is the ONLY wait before the first swap
-    const delay = setTimeout(doSwap, startDelay);
-    return () => {
-      clearTimeout(delay);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (innerTimerRef.current) clearTimeout(innerTimerRef.current);
-    };
-  }, [startDelay, doSwap]);
-
-  return (
-    <motion.div
-      className="relative rounded-full shrink-0 size-[48px] sm:size-[60px] overflow-hidden"
-      initial={{
-        opacity: config.introOpacity,
-        scale: config.introScale,
-        filter: `blur(${config.introBlur}px)`
-      }}
-      animate={{
-        scale: phase === "hiding" ? config.hideScale : phase === "showing" ? config.showScale : 1,
-        opacity: phase === "hiding" ? config.hideOpacity : 1,
-        filter: phase === "hiding" ? `blur(${config.hideBlur}px)` : phase === "showing" ? `blur(${config.showBlur}px)` : "blur(0px)",
-      }}
-      transition={{
-        duration: phase === "intro" ? config.introDuration : phase === "hiding" ? config.hideDuration : phase === "showing" ? config.showDuration : 0.3,
-        ease: [0.4, 0, 0.2, 1],
-        delay: phase === "intro" ? introDelay : 0,
-      }}
-    >
-      <ProgressiveImage
-        src={src ?? imgAlbum}
-        alt="Album cover art"
-        className="absolute inset-0 max-w-none object-cover size-full"
-        style={{
-          filter: "drop-shadow(0px 8px 14px rgba(19,15,41,0.35))",
-        }}
-      />
-    </motion.div>
-  );
-}
-
-/* ── LoadingScreen ── */
 export function LoadingScreen({
   mood,
   popularity,
@@ -207,120 +145,114 @@ export function LoadingScreen({
   highlightImageUrl,
   morph,
 }: LoadingScreenProps) {
-  const dial = {
-    grid: {
-      introBlur: 3,
-      introScale: 0.8,
-      introDuration: 2,
-      introOpacity: 1,
-    },
-    tile: {
-      cycleMin: 4000,
-      cycleJitter: 2000,
-      hideDuration: 0.7,
-      showDuration: 1.2,
-      hideScale: 0.85,
-      showScale: 1.08,
-      hideOpacity: 0.1,
-      hideBlur: 5,
-      showBlur: 0,
-      swapDelay: 1220,
-      settleDelay: 320,
-      introOpacity: 0,
-      introScale: 0.85,
-      introBlur: 6,
-      introDuration: 0.5,
-      introDelayPerTile: 0.1,
-      introDelayJitter: 0.4,
-      cycleStartMin: 800,
-      cycleStartSpread: 6000,
-    },
-    hero: {
-      size: 56,
-      spring: {
-        type: "spring" as const,
-        stiffness: 200,
-        damping: 25,
-        mass: 1,
-      },
-      introOpacity: 0,
-      introScale: 0.6,
-      introBlur: 8,
-      introDuration: 0.3,
-    },
-    copy: {
-      titleDelay: 0.3,
-      titleDuration: 0.9,
-    },
-  };
+  const [isLowPerf, setIsLowPerf] = useState(false);
+  const [cycleStep, setCycleStep] = useState(0);
+
+  useEffect(() => {
+    const nav = navigator as Navigator & {
+      deviceMemory?: number;
+      connection?: { saveData?: boolean };
+    };
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const saveData = nav.connection?.saveData === true;
+    const lowMemory = typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4;
+    const lowCores = typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency <= 4;
+
+    setIsLowPerf(reducedMotion || saveData || lowMemory || lowCores);
+  }, []);
+
+  const profile = isLowPerf ? LITE_PROFILE : FULL_PROFILE;
+  const maxTiles = profile.cols * profile.rows;
 
   const { rows, hero, imagePool } = useMemo(() => {
     const normalizedImages = images.filter(Boolean);
     const uniqueImages = Array.from(new Set(normalizedImages));
     const highlight = highlightImageUrl ?? null;
     const highlightThumb = highlight ? toThumb(highlight) : null;
-    const pool = uniqueImages.filter((img) => img !== highlightThumb);
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
 
-    let expanded = shuffled.slice(0, MAX_TILES);
-    if (expanded.length === 0) expanded = [imgAlbum];
+    const poolWithoutHero = uniqueImages.filter((img) => img !== highlightThumb);
+    const basePool = poolWithoutHero.length > 0 ? poolWithoutHero : [imgAlbum];
 
-    // If we need more images, distribute repeats evenly across the grid
-    if (expanded.length < MAX_TILES) {
-      const base = [...expanded];
-      const needed = MAX_TILES - expanded.length;
-      const repeatsPerImage = Math.ceil(needed / base.length);
+    const shuffledBase = [...basePool].sort(() => Math.random() - 0.5);
+    const expanded: string[] = [];
 
-      // Create a distributed repeat pattern
-      const repeats: string[] = [];
-      for (let r = 0; r < repeatsPerImage; r++) {
-        const shuffledBase = [...base].sort(() => Math.random() - 0.5);
-        repeats.push(...shuffledBase);
-      }
-
-      expanded.push(...repeats.slice(0, needed));
-      // Final shuffle to distribute repeats
-      expanded = expanded.sort(() => Math.random() - 0.5);
+    for (let i = 0; i < maxTiles; i += 1) {
+      expanded.push(shuffledBase[i % shuffledBase.length]);
     }
 
     const chunked: string[][] = [];
-    for (let i = 0; i < expanded.length; i += COLS) {
-      const row = expanded.slice(i, i + COLS);
+    for (let i = 0; i < expanded.length; i += profile.cols) {
+      const row = expanded.slice(i, i + profile.cols);
       if (row.length === 0) break;
       chunked.push(row);
-      if (chunked.length >= MAX_ROWS) break;
+      if (chunked.length >= profile.rows) break;
     }
 
-    if (chunked.length === 0) chunked.push([imgAlbum]);
+    if (chunked.length === 0) {
+      chunked.push([imgAlbum]);
+    }
 
     let heroRowIndex = 0;
     let heroColIndex = 0;
+
     if (highlightThumb) {
       const seed = hashString(highlightThumb);
       heroRowIndex = seed % chunked.length;
       heroColIndex = Math.min(
-        Math.floor(seed / chunked.length) % COLS,
-        COLS - 1
+        Math.floor(seed / Math.max(1, chunked.length)) % profile.cols,
+        Math.max(0, profile.cols - 1)
       );
+
       const targetRow = chunked[heroRowIndex] ?? [];
-      if (!targetRow.includes(highlightThumb)) {
-        targetRow[heroColIndex] = highlightThumb;
-      }
+      targetRow[heroColIndex] = highlightThumb;
       chunked[heroRowIndex] = targetRow;
     }
 
     return {
       rows: chunked,
       hero: highlightThumb
-        ? { rowIndex: heroRowIndex, colIndex: heroColIndex, url: highlightThumb }
+        ? { rowIndex: heroRowIndex, colIndex: heroColIndex }
         : null,
-      imagePool: shuffled.length > 0 ? shuffled : [imgAlbum],
+      imagePool: shuffledBase,
     };
-  }, [images, highlightImageUrl]);
+  }, [images, highlightImageUrl, maxTiles, profile.cols, profile.rows]);
+
+  useEffect(() => {
+    setCycleStep(0);
+  }, [imagePool]);
+
+  useEffect(() => {
+    if (!profile.enableCycling || imagePool.length < 2) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setCycleStep((prev) => prev + 1);
+    }, profile.cycleMs);
+
+    return () => window.clearInterval(interval);
+  }, [imagePool.length, profile.cycleMs, profile.enableCycling]);
+
+  const getTileSrc = (tileIndex: number) => {
+    if (imagePool.length === 0) return imgAlbum;
+
+    if (!profile.enableCycling || imagePool.length < 2) {
+      return imagePool[tileIndex % imagePool.length];
+    }
+
+    const bucket = tileIndex % profile.cycleBuckets;
+    const progression = Math.floor((cycleStep + bucket) / profile.cycleBuckets);
+    const sourceIndex = (tileIndex + progression) % imagePool.length;
+    return imagePool[sourceIndex] ?? imgAlbum;
+  };
+
+  const activeBucket = profile.enableCycling
+    ? cycleStep % profile.cycleBuckets
+    : -1;
 
   return (
     <div className="w-screen flex flex-col items-center flex-1 pt-[16px] sm:pt-[24px]">
-      {/* Shimmer keyframe (injected once) */}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 0.3; }
@@ -328,88 +260,95 @@ export function LoadingScreen({
         }
       `}</style>
 
-      {/* Title text */}
       <motion.p
         className="font-['Spectral',serif] text-[24px] text-center text-white leading-[28px] w-full px-6"
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: dial.copy.titleDuration, delay: dial.copy.titleDelay }}
+        transition={{ duration: profile.titleDuration, delay: profile.titleDelay }}
       >
         Recommending the perfect one from our hand picked collection
       </motion.p>
 
-      {/* Album art grid */}
       <motion.div
-        className="flex-1 w-screen flex flex-col justify-evenly mt-[24px] sm:mt-[48px] pb-4 sm:pb-6 pointer-events-none"
+        className="flex-1 w-screen flex flex-col justify-center pointer-events-none mt-[24px] sm:mt-[42px] pb-4 sm:pb-6"
         style={{
           marginLeft: "calc(50% - 50vw)",
           marginRight: "calc(50% - 50vw)",
+          gap: profile.rowGap,
         }}
-        initial={{ opacity: 1 }}
-        animate={{ opacity: 1 }}
+        initial={{ opacity: 0.92, filter: `blur(${profile.gridIntroBlur}px)` }}
+        animate={{ opacity: 1, filter: "blur(0px)" }}
+        transition={{ duration: profile.gridIntroDuration, ease: "easeOut" }}
       >
         {rows.map((row, rowIndex) => (
           <div
             key={`row-${rowIndex}`}
             className="relative w-screen flex justify-center items-center"
           >
-            <div className="flex gap-[12px] sm:gap-[18px] justify-center">
-              {row.map((src, colIndex) => {
+            <div
+              className="flex justify-center"
+              style={{ gap: profile.tileGap }}
+            >
+              {row.map((defaultSrc, colIndex) => {
+                const tileIndex = rowIndex * profile.cols + colIndex;
                 const isHero =
                   hero &&
                   rowIndex === hero.rowIndex &&
                   colIndex === hero.colIndex;
 
-                // Row-by-row appearance with visible blur sweep
-                const introDelay = rowIndex * 0.04; // ~0.44s total for all 11 rows
-
                 if (isHero) {
                   return (
                     <div
-                      key={`${rowIndex}-${colIndex}`}
+                      key={`hero-${rowIndex}-${colIndex}`}
                       className="relative rounded-full shrink-0 overflow-visible"
-                      style={{ width: dial.hero.size, height: dial.hero.size }}
+                      style={{ width: profile.heroSize, height: profile.heroSize }}
                     >
                       <motion.div
                         className="absolute inset-0 overflow-hidden"
                         layoutId="song-album"
-                        initial={{ opacity: 0, scale: 0.85 }}
+                        initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         style={{ borderRadius: morph.startRadius }}
                         transition={{
-                          layout: {
-                            ...morph.spring,
-                          },
-                          opacity: { duration: 0.4, delay: introDelay },
-                          scale: { duration: 0.4, delay: introDelay },
+                          layout: { ...morph.spring },
+                          opacity: { duration: 0.28, delay: 0.08 },
+                          scale: { duration: 0.28, delay: 0.08 },
                         }}
                       >
                         <ProgressiveImage
-                          src={src ?? imgAlbum}
+                          src={defaultSrc ?? imgAlbum}
                           alt="Featured album cover"
                           className="absolute inset-0 max-w-none object-cover size-full"
+                          loading="eager"
                         />
                       </motion.div>
                     </div>
                   );
                 }
 
-                // Stagger start times evenly across all tiles
-                const tileIndex = rowIndex * COLS + colIndex;
-                const totalNonHero = rows.reduce((s, r) => s + r.length, 0) - (hero ? 1 : 0);
-                const startDelay = dial.tile.cycleStartMin
-                  + (tileIndex / Math.max(1, totalNonHero - 1)) * dial.tile.cycleStartSpread
-                  + Math.random() * 500;
+                const tileSrc = getTileSrc(tileIndex);
+                const bucket = tileIndex % profile.cycleBuckets;
+                const animatePulse = profile.enableCycling && bucket === activeBucket;
 
                 return (
-                  <CyclingTile
-                    key={`${rowIndex}-${colIndex}`}
-                    initialSrc={src}
-                    imagePool={imagePool}
-                    startDelay={startDelay}
-                    introDelay={introDelay}
-                    config={dial.tile}
-                  />
+                  <motion.div
+                    key={`tile-${rowIndex}-${colIndex}`}
+                    className="relative rounded-full shrink-0 overflow-hidden"
+                    style={{ width: profile.tileSize, height: profile.tileSize, willChange: "transform, opacity" }}
+                    animate={
+                      animatePulse
+                        ? { opacity: [0.78, 1], scale: [0.985, 1] }
+                        : { opacity: 1, scale: 1 }
+                    }
+                    transition={{ duration: 0.22, ease: "easeOut" }}
+                  >
+                    <ProgressiveImage
+                      src={tileSrc}
+                      alt="Album cover art"
+                      className="absolute inset-0 max-w-none object-cover size-full"
+                      loading="lazy"
+                    />
+                  </motion.div>
                 );
               })}
             </div>

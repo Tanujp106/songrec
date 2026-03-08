@@ -126,6 +126,7 @@
 
   body {
     @apply bg-background text-foreground;
+    margin: 0;
   }
 
   /**
@@ -135,6 +136,15 @@
 
   html {
     font-size: var(--font-size);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
   }
 
   h1 {
@@ -179,4 +189,3 @@
     line-height: 1.5;
   }
 }
-
