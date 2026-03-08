@@ -170,7 +170,7 @@ function CyclingTile({
 
   return (
     <motion.div
-      className="relative rounded-full shrink-0 size-[60px] overflow-hidden"
+      className="relative rounded-full shrink-0 size-[48px] sm:size-[60px] overflow-hidden"
       initial={{
         opacity: config.introOpacity,
         scale: config.introScale,
@@ -189,6 +189,7 @@ function CyclingTile({
     >
       <ProgressiveImage
         src={src ?? imgAlbum}
+        alt="Album cover art"
         className="absolute inset-0 max-w-none object-cover size-full"
         style={{
           filter: "drop-shadow(0px 8px 14px rgba(19,15,41,0.35))",
@@ -318,7 +319,7 @@ export function LoadingScreen({
   }, [images, highlightImageUrl]);
 
   return (
-    <div className="w-screen flex flex-col items-center flex-1 pt-[24px]">
+    <div className="w-screen flex flex-col items-center flex-1 pt-[16px] sm:pt-[24px]">
       {/* Shimmer keyframe (injected once) */}
       <style>{`
         @keyframes pulse {
@@ -339,7 +340,7 @@ export function LoadingScreen({
 
       {/* Album art grid */}
       <motion.div
-        className="flex-1 w-screen flex flex-col justify-evenly gap-[12px] mt-[48px] pb-6 pointer-events-none"
+        className="flex-1 w-screen flex flex-col justify-evenly mt-[24px] sm:mt-[48px] pb-4 sm:pb-6 pointer-events-none"
         style={{
           marginLeft: "calc(50% - 50vw)",
           marginRight: "calc(50% - 50vw)",
@@ -350,9 +351,9 @@ export function LoadingScreen({
         {rows.map((row, rowIndex) => (
           <div
             key={`row-${rowIndex}`}
-            className="relative w-screen flex justify-center h-[72px]"
+            className="relative w-screen flex justify-center items-center"
           >
-            <div className="flex gap-[18px] justify-center">
+            <div className="flex gap-[12px] sm:gap-[18px] justify-center">
               {row.map((src, colIndex) => {
                 const isHero =
                   hero &&
@@ -385,6 +386,7 @@ export function LoadingScreen({
                       >
                         <ProgressiveImage
                           src={src ?? imgAlbum}
+                          alt="Featured album cover"
                           className="absolute inset-0 max-w-none object-cover size-full"
                         />
                       </motion.div>

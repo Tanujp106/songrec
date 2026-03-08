@@ -77,7 +77,7 @@ export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: Pop
   const gradientEnd = accentColor + toHex(dial.gradientEndOpacity);
 
   return (
-    <div className="flex flex-col gap-2 w-full max-w-[360px] px-1 mb-2 mt-4">
+    <div className="flex flex-col gap-1.5 sm:gap-2 w-full max-w-[360px] px-1 mb-1 sm:mb-2 mt-2 sm:mt-4">
       {/* Slider Container */}
       <div
         ref={trackRef}

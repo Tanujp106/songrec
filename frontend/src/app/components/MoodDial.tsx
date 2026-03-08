@@ -336,15 +336,15 @@ export function MoodPicker({
     };
 
   return (
-    <div className="flex flex-col gap-4 items-center relative w-full mt-2">
-      <p className="font-['Spectral',serif] text-[26px] text-center text-white w-72 leading-[1.2]">
+    <div className="flex flex-col gap-2 sm:gap-4 items-center relative w-full mt-2">
+      <p className="font-['Spectral',serif] text-[24px] sm:text-[26px] text-center text-white w-72 leading-[1.2]">
         What would you want to listen twin?
       </p>
 
       {/* Dial & Face Container */}
       <div
         ref={dialRef}
-        className="relative w-[280px] h-[280px] flex items-center justify-center mt-0 touch-none cursor-pointer"
+        className="relative w-[240px] h-[240px] sm:w-[280px] sm:h-[280px] flex items-center justify-center mt-0 touch-none cursor-pointer"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -467,7 +467,7 @@ export function MoodPicker({
               duration: dial.scaleTransitionDuration,
             },
           }}
-          className="relative w-[190px] h-[190px] rounded-full flex items-center justify-center border-[5px] border-white overflow-hidden pointer-events-none"
+          className="relative w-[160px] h-[160px] sm:w-[190px] sm:h-[190px] rounded-full flex items-center justify-center border-[5px] border-white overflow-hidden pointer-events-none"
           style={{
             backgroundColor: isDragging ? "#DFDCFF" : "#EBE9FF",
             transition: "background-color 0.2s ease",
@@ -516,7 +516,7 @@ export function MoodPicker({
 
       {/* Selected Mood Pill */}
       <motion.div
-        className="border border-white/50 backdrop-blur-sm py-[4px] rounded-[130px] mt-2 relative overflow-hidden h-[40px] flex items-center justify-center"
+        className="border border-white/50 backdrop-blur-sm py-[4px] rounded-[130px] mt-1 sm:mt-2 relative overflow-hidden h-[36px] sm:h-[40px] flex items-center justify-center"
         style={{ width: hasPicked ? 160 : "auto", paddingLeft: hasPicked ? 0 : 40, paddingRight: hasPicked ? 0 : 40 }}
         animate={{
           backgroundColor: `${accentColor}1A`,

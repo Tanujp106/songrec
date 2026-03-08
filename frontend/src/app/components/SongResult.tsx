@@ -59,7 +59,7 @@ export function SongResult({
   return (
     <div className="w-full flex flex-col items-center justify-between flex-1">
       {/* Top content */}
-      <div className="flex flex-col items-center gap-[32px] w-full mt-auto">
+      <div className="flex flex-col items-center gap-[20px] sm:gap-[32px] w-full mt-auto">
         {/* Description text */}
         <motion.div
           className="flex flex-col items-center w-full"
@@ -88,7 +88,7 @@ export function SongResult({
         {/* Album art — morph target for layoutId transition */}
         <div className="w-full">
           <div
-            className="relative w-full aspect-square max-h-[354px]"
+            className="relative w-full aspect-square max-h-[min(354px,45svh)]"
             style={{ borderRadius: morph.endRadius }}
           >
             <motion.div
@@ -152,7 +152,7 @@ export function SongResult({
       >
         {/* Add to Spotify button */}
         <motion.a
-          className="w-full flex gap-[8px] items-center justify-center py-[16px] rounded-[1000px] text-white cursor-pointer"
+          className="w-full flex gap-[8px] items-center justify-center py-[12px] sm:py-[16px] rounded-[1000px] text-white cursor-pointer"
           animate={{
             backgroundColor: accentColor,
           }}
@@ -162,15 +162,18 @@ export function SongResult({
           target={spotifyUrl ? "_blank" : undefined}
           rel={spotifyUrl ? "noopener noreferrer" : undefined}
           aria-disabled={!spotifyUrl}
+          aria-label={`Open ${title} on Spotify`}
           style={{ opacity: spotifyUrl ? 1 : 0.6, pointerEvents: spotifyUrl ? "auto" : "none" }}
         >
           {/* Spotify icon */}
-          <div className="overflow-clip relative shrink-0 size-[20px]">
+          <div className="overflow-clip relative shrink-0 size-[20px]" aria-hidden="true">
             <svg
               className="absolute block size-full"
               fill="none"
               preserveAspectRatio="none"
               viewBox="0 0 19.6984 19.6984"
+              role="img"
+              aria-label="Spotify logo"
               style={{ transform: "scaleY(-1)" }}
             >
               <path d={svgPaths.p2d573100} fill="white" />
@@ -183,7 +186,7 @@ export function SongResult({
 
         {/* Start over button */}
         <button
-          className="w-full flex gap-[8px] items-center justify-center py-[16px] rounded-[1000px] relative cursor-pointer bg-transparent"
+          className="w-full flex gap-[8px] items-center justify-center py-[12px] sm:py-[16px] rounded-[1000px] relative cursor-pointer bg-transparent"
           onClick={onStartOver}
         >
           <div
@@ -191,12 +194,14 @@ export function SongResult({
             className="absolute border border-white/80 border-solid inset-0 pointer-events-none rounded-[1000px]"
           />
           {/* Replay icon */}
-          <div className="relative shrink-0 size-[20px]">
+          <div className="relative shrink-0 size-[20px]" aria-hidden="true">
             <svg
               className="absolute block size-full"
               fill="none"
               preserveAspectRatio="none"
               viewBox="0 0 20 20"
+              role="img"
+              aria-label="Replay icon"
             >
               <mask
                 height="20"
