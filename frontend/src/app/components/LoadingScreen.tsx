@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "motion/react";
-import { useDialKit } from "dialkit";
 import { toThumb } from "@/app/lib/api";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 
@@ -207,59 +206,52 @@ export function LoadingScreen({
   highlightImageUrl,
   morph,
 }: LoadingScreenProps) {
-  const dial = useDialKit("Loading Screen", {
+  const dial = {
     grid: {
-      introBlur: [3, 0, 40],
-      introScale: [0.8, 0.7, 1.1],
-      introDuration: [2, 0.4, 3],
-      introOpacity: [1, 0, 1],
+      introBlur: 3,
+      introScale: 0.8,
+      introDuration: 2,
+      introOpacity: 1,
     },
     tile: {
-      // Wait between subsequent swaps (after the first one)
-      cycleMin: [4000, 1000, 12000],
-      cycleJitter: [2000, 0, 4000],
-      hideDuration: [0.7, 0.1, 1.5],
-      showDuration: [1.2, 0.1, 2],
-      hideScale: [0.85, 0.4, 1],
-      showScale: [1.08, 0.9, 1.4],
-      hideOpacity: [0.1, 0, 1],
-      hideBlur: [5, 0, 24],
-      showBlur: [0, 0, 12],
-      swapDelay: [1220, 100, 2000],
-      settleDelay: [320, 100, 1200],
-
-      // Intro animation (row-by-row)
-      introOpacity: [0, 0, 1],
-      introScale: [0.85, 0.3, 1],
-      introBlur: [6, 0, 20],
-      introDuration: [0.5, 0.1, 1.2],
-      introDelayPerTile: [0.1, 0, 0.3],
-      introDelayJitter: [0.4, 0, 0.8],
-
-      // How soon the first tile starts its first swap (ms)
-      cycleStartMin: [800, 200, 2000],
-      // Total stagger window — tiles spread their first swap across this range (ms)
-      cycleStartSpread: [6000, 2000, 15000],
+      cycleMin: 4000,
+      cycleJitter: 2000,
+      hideDuration: 0.7,
+      showDuration: 1.2,
+      hideScale: 0.85,
+      showScale: 1.08,
+      hideOpacity: 0.1,
+      hideBlur: 5,
+      showBlur: 0,
+      swapDelay: 1220,
+      settleDelay: 320,
+      introOpacity: 0,
+      introScale: 0.85,
+      introBlur: 6,
+      introDuration: 0.5,
+      introDelayPerTile: 0.1,
+      introDelayJitter: 0.4,
+      cycleStartMin: 800,
+      cycleStartSpread: 6000,
     },
     hero: {
-      size: [56, 40, 90],
+      size: 56,
       spring: {
-        type: "spring",
+        type: "spring" as const,
         stiffness: 200,
         damping: 25,
         mass: 1,
       },
-      // Hero intro animation
-      introOpacity: [0, 0, 1],
-      introScale: [0.6, 0.3, 1],
-      introBlur: [8, 0, 20],
-      introDuration: [0.3, 0.1, 1],
+      introOpacity: 0,
+      introScale: 0.6,
+      introBlur: 8,
+      introDuration: 0.3,
     },
     copy: {
-      titleDelay: [0.3, 0, 1],
-      titleDuration: [0.9, 0.2, 1.5],
+      titleDelay: 0.3,
+      titleDuration: 0.9,
     },
-  });
+  };
 
   const { rows, hero, imagePool } = useMemo(() => {
     const normalizedImages = images.filter(Boolean);

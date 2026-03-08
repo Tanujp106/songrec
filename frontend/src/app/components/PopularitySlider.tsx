@@ -1,6 +1,5 @@
 import React, { useState, useRef } from "react";
 import { motion } from "motion/react";
-import { useDialKit } from "dialkit";
 
 const PAD_PCT = 7;
 
@@ -10,38 +9,25 @@ interface PopularitySliderProps {
 }
 
 export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: PopularitySliderProps) {
-  const dial = useDialKit("Popularity Slider", {
-    // ── Thumb Size & Scaling ──
-    thumbSize: [20, 12, 40],
-    thumbPressedSize: [26, 16, 50],
-
-    // ── Spring Animation ──
-    springVisualDuration: [0.3, 0.1, 0.6],
-    springBounce: [0.2, 0, 0.8],
-
-    // ── Shadow Properties ──
-    shadowIdleBlur: [12, 2, 20],
-    shadowPressedBlur: [12, 8, 30],
-    shadowPressedGlow: [4, 0, 12],
-    shadowIdleOpacity: [0.25, 0.1, 0.5],
-    shadowPressedOpacity: [0.3, 0.1, 0.6],
-
-    // ── Track Styling ──
-    trackHeight: [36, 24, 48],
-    trackBorderRadius: [30, 12, 40],
-    trackBackdropBlur: [2.2, 0, 5],
-
-    // ── Dot Styling ──
-    dotSize: [4.1, 2, 8],
-
-    // ── Color Transitions ──
-    colorTransitionDuration: [0.4, 0.3, 1.5],
-
-    // ── Gradient Opacity ──
-    gradientStartOpacity: [0.66, 0.3, 1],
-    gradientMidOpacity: [0.6, 0.3, 1],
-    gradientEndOpacity: [0.44, 0.2, 0.8],
-  });
+  const dial = {
+    thumbSize: 20,
+    thumbPressedSize: 26,
+    springVisualDuration: 0.3,
+    springBounce: 0.2,
+    shadowIdleBlur: 12,
+    shadowPressedBlur: 12,
+    shadowPressedGlow: 4,
+    shadowIdleOpacity: 0.25,
+    shadowPressedOpacity: 0.3,
+    trackHeight: 36,
+    trackBorderRadius: 30,
+    trackBackdropBlur: 2.2,
+    dotSize: 4.1,
+    colorTransitionDuration: 0.4,
+    gradientStartOpacity: 0.66,
+    gradientMidOpacity: 0.6,
+    gradientEndOpacity: 0.44,
+  };
 
   const [value, setValue] = useState(0); // 0 to 3
   const [isPressed, setIsPressed] = useState(false);

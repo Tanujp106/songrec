@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
-// import { useDialKit } from "dialkit";
 
 function getArcPath(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
   const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
@@ -54,17 +53,6 @@ export function MoodPicker({
   selectedMood = null,
   nudge = false,
 }: MoodPickerProps) {
-  // const dial = useDialKit("Mood Dial", {
-  //   // ── Drag & Scale Properties ──
-  //   dragMaxOffset: [28, 8, 50],
-  //   dragScale: [0.88, 0.6, 1.2],
-  //   pullScale: [0.95, 0.7, 1.2],
-  //   nudgeScale: [1.1, 0.9, 1.3],
-  //   hoverScale: [1.02, 0.9, 1.2],
-  //   // ... (rest of config)
-  // });
-
-  // Static values when dialkit is disabled
   const dial = {
     dragMaxOffset: 28,
     dragScale: 0.88,

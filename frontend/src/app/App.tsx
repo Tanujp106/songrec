@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
-// import { useDialKit } from "dialkit";
 import { MoodPicker, MOOD_COLORS } from "./components/MoodDial";
 import { PopularitySlider } from "./components/PopularitySlider";
 import { LoadingScreen } from "./components/LoadingScreen";
@@ -45,23 +44,6 @@ export default function App() {
   const [albumImagesMood, setAlbumImagesMood] = useState<string | null>(null);
   const [dialNudge, setDialNudge] = useState(false);
   const [btnShake, setBtnShake] = useState(false);
-  // const appDial = useDialKit("App", {
-  //   bgTransitionDuration: [0.5, 0.1, 2],
-  //   bgBrightnessOffset: [0.22, 0, 0.5],
-  //   screenFadeDuration: [0.6, 0.1, 2],
-  // });
-  // const morphDial = useDialKit("Morph Transition", {
-  //   startRadius: [999, 80, 999],
-  //   endRadius: [32, 0, 80],
-  //   spring: {
-  //     type: "spring",
-  //     stiffness: 120,
-  //     damping: 24,
-  //     mass: 1,
-  //   },
-  // });
-
-  // Default values when dialkit is disabled
   const appDial = {
     bgTransitionDuration: 0.5,
     bgBrightnessOffset: 0.22,
