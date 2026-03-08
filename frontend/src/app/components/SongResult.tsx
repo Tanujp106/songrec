@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { motion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
@@ -13,6 +13,16 @@ interface SongResultProps {
   onStartOver: () => void;
   song: SongRecommendation | null;
   error?: string | null;
+  morph: {
+    startRadius: number;
+    endRadius: number;
+    spring: {
+      type: "spring";
+      stiffness: number;
+      damping: number;
+      mass: number;
+    };
+  };
 }
 
 export function SongResult({
@@ -21,7 +31,8 @@ export function SongResult({
   accentColor,
   onStartOver,
   song,
-  error
+  error,
+  morph,
 }: SongResultProps) {
   const popLabel = POPULARITY_LABELS[popularity] || "popular";
   const title = song?.song_name ?? "No song found";
@@ -31,16 +42,30 @@ export function SongResult({
   const spotifyUrl = song?.spotify_url ?? null;
   const hasError = !!error;
 
+  // Auto-scroll marquee for artist text if it overflows
+  const artistTextRef = useRef<HTMLSpanElement>(null);
+  const artistContainerRef = useRef<HTMLDivElement>(null);
+  const [artistOverflow, setArtistOverflow] = useState(0);
+
+  useEffect(() => {
+    const text = artistTextRef.current;
+    const container = artistContainerRef.current;
+    if (text && container) {
+      const overflow = text.scrollWidth - container.clientWidth;
+      setArtistOverflow(overflow > 0 ? overflow : 0);
+    }
+  }, [artist]);
+
   return (
-    <div className="w-full flex flex-col items-center justify-between flex-1 pt-[80px]">
+    <div className="w-full flex flex-col items-center justify-between flex-1">
       {/* Top content */}
-      <div className="flex flex-col items-center gap-[32px] w-full mt-4">
+      <div className="flex flex-col items-center gap-[32px] w-full mt-auto">
         {/* Description text */}
         <motion.div
           className="flex flex-col items-center w-full"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.1 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
         >
           <p className="font-['Spectral',serif] text-[24px] text-center text-white leading-[28px] w-full">
             {hasError ? (
@@ -60,52 +85,70 @@ export function SongResult({
           )}
         </motion.div>
 
-        {/* Album art */}
-        <motion.div
-          className="w-full"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-        >
-          <div className="relative w-full aspect-square max-h-[354px] rounded-[32px] shadow-[0px_9px_14px_0px_rgba(19,15,41,0.5)] overflow-hidden">
+        {/* Album art — morph target for layoutId transition */}
+        <div className="w-full">
+          <div
+            className="relative w-full aspect-square max-h-[354px]"
+            style={{ borderRadius: morph.endRadius }}
+          >
             <motion.div
-              className="absolute inset-0"
+              className="absolute inset-0 overflow-hidden"
               layoutId="song-album"
-              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              style={{ borderRadius: morph.endRadius }}
+              transition={{
+                layout: {
+                  ...morph.spring,
+                },
+              }}
             >
               <img
                 alt={album}
-                className="absolute inset-0 max-w-none object-cover rounded-[32px] size-full"
+                className="absolute inset-0 max-w-none object-cover size-full"
                 src={albumImage}
               />
             </motion.div>
-            <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0px_12px_8px_0px_rgba(0,0,0,0.25)]" />
           </div>
-        </motion.div>
+        </div>
 
         {/* Song info */}
         <motion.div
           className="flex flex-col items-center gap-[4px] w-full px-[24px]"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.35 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
         >
           <p className="font-['Spectral',serif] text-[24px] text-white tracking-[-0.96px] text-center overflow-hidden text-ellipsis whitespace-nowrap w-full leading-[28px]">
             {title}
           </p>
           <div className="flex flex-col items-center text-[16px] text-white/80 tracking-[-0.48px] w-full">
-            <p className="overflow-hidden text-center w-full">by {artist}</p>
-            <p className="overflow-hidden text-center w-full">From {album}</p>
+            {/* Artist — single-line with auto-scrolling marquee if overflowing */}
+            <div
+              ref={artistContainerRef}
+              className="overflow-hidden whitespace-nowrap w-full relative"
+              style={{ maskImage: artistOverflow > 0 ? "linear-gradient(to right, transparent, black 8%, black 92%, transparent)" : undefined, WebkitMaskImage: artistOverflow > 0 ? "linear-gradient(to right, transparent, black 8%, black 92%, transparent)" : undefined }}
+            >
+              <motion.span
+                ref={artistTextRef}
+                className="inline-block text-center w-full"
+                style={{ width: artistOverflow > 0 ? "auto" : "100%" }}
+                animate={artistOverflow > 0 ? { x: [0, -artistOverflow, 0] } : { x: 0 }}
+                transition={artistOverflow > 0 ? { duration: Math.max(10, artistOverflow / 12), repeat: Infinity, ease: "easeInOut", repeatDelay: 2.5 } : undefined}
+              >
+                by {artist}
+              </motion.span>
+            </div>
+            {/* Album — single-line, truncated */}
+            <p className="overflow-hidden text-center w-full whitespace-nowrap text-ellipsis">From {album}</p>
           </div>
         </motion.div>
       </div>
 
       {/* Bottom buttons */}
       <motion.div
-        className="flex flex-col gap-[8px] items-center w-full mt-6 mb-2"
+        className="flex flex-col gap-[8px] items-center w-full mt-auto"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.45 }}
+        transition={{ duration: 0.5, delay: 0.55 }}
       >
         {/* Add to Spotify button */}
         <motion.a

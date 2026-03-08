@@ -1,13 +1,15 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
+// import { useDialKit } from "dialkit";
 import { MoodPicker, MOOD_COLORS } from "./components/MoodDial";
 import { PopularitySlider } from "./components/PopularitySlider";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { SongResult } from "./components/SongResult";
 import {
-  fetchMoodImages,
+  fetchAllMoodImages,
   fetchRecommendation,
-  type SongRecommendation
+  preloadImageFiles,
+  type SongRecommendation,
 } from "./lib/api";
 import { Agentation } from "agentation";
 
@@ -40,8 +42,41 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("mood");
   const [song, setSong] = useState<SongRecommendation | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [freezeMarquee, setFreezeMarquee] = useState(false);
   const [albumImagesMood, setAlbumImagesMood] = useState<string | null>(null);
+  const [dialNudge, setDialNudge] = useState(false);
+  const [btnShake, setBtnShake] = useState(false);
+  // const appDial = useDialKit("App", {
+  //   bgTransitionDuration: [0.5, 0.1, 2],
+  //   bgBrightnessOffset: [0.22, 0, 0.5],
+  //   screenFadeDuration: [0.6, 0.1, 2],
+  // });
+  // const morphDial = useDialKit("Morph Transition", {
+  //   startRadius: [999, 80, 999],
+  //   endRadius: [32, 0, 80],
+  //   spring: {
+  //     type: "spring",
+  //     stiffness: 120,
+  //     damping: 24,
+  //     mass: 1,
+  //   },
+  // });
+
+  // Default values when dialkit is disabled
+  const appDial = {
+    bgTransitionDuration: 0.5,
+    bgBrightnessOffset: 0.22,
+    screenFadeDuration: 0.6,
+  };
+  const morphDial = {
+    startRadius: 999,
+    endRadius: 32,
+    spring: {
+      type: "spring" as const,
+      stiffness: 120,
+      damping: 24,
+      mass: 1,
+    },
+  };
 
   const handleMoodConfirmed = useCallback((moodName: string | null) => {
     setConfirmedMood(moodName);
@@ -55,34 +90,43 @@ export default function App() {
   const brightnessFactor = 1.2 - (popularity / 3) * 0.2;
   const accentColor = adjustBrightness(colors.from, brightnessFactor);
   const bgFromColor = adjustBrightness(colors.from, brightnessFactor);
-  const bgToColor = adjustBrightness(colors.from, brightnessFactor + 0.22);
+  const bgToColor = adjustBrightness(colors.from, brightnessFactor + appDial.bgBrightnessOffset);
 
   // Unique key per mood so AnimatePresence crossfades between moods
   const bgKey = confirmedMood ?? "__default__";
 
+  // ── A: Pre-fetch ALL mood images on mount ──
+  const imageCache = useRef<Map<string, string[]>>(new Map());
   const [albumImages, setAlbumImages] = useState<string[]>([]);
+  const preloadedMoodRef = useRef<string | null>(null);
 
-  const preloadImages = useCallback(async (mood: string) => {
-    const images = await fetchMoodImages(mood, 200);
-    if (images.length === 0) {
-      setAlbumImages([]);
-      setAlbumImagesMood(mood);
-      return [];
-    }
-    images.forEach((src) => {
-      const img = new Image();
-      img.src = src;
-    });
-    setAlbumImages(images);
-    setAlbumImagesMood(mood);
-    return images;
+  // Fire all 8 mood image fetches on app mount — runs once
+  useEffect(() => {
+    fetchAllMoodImages(80).then((map) => {
+      imageCache.current = map;
+      // If user already picked a mood before fetch finished, apply it now
+      if (confirmedMood && map.has(confirmedMood)) {
+        setAlbumImages(map.get(confirmedMood)!);
+        setAlbumImagesMood(confirmedMood);
+      }
+    }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── C: Priority-preload first 20 images when mood is confirmed ──
   useEffect(() => {
     if (!confirmedMood) return;
-    if (albumImagesMood === confirmedMood) return;
-    preloadImages(confirmedMood).catch(() => undefined);
-  }, [confirmedMood, albumImagesMood, preloadImages]);
+    if (preloadedMoodRef.current === confirmedMood) return;
+
+    const cached = imageCache.current.get(confirmedMood);
+    if (cached && cached.length > 0) {
+      setAlbumImages(cached);
+      setAlbumImagesMood(confirmedMood);
+      // Priority-preload first 20 files, rest fire-and-forget
+      preloadImageFiles(cached, 20);
+      preloadedMoodRef.current = confirmedMood;
+    }
+  }, [confirmedMood]);
 
   const handleRecommend = useCallback(async () => {
     if (!confirmedMood) return;
@@ -91,42 +135,46 @@ export default function App() {
     setError(null);
     setSong(null);
     setScreen("loading");
-    setFreezeMarquee(false);
+
+    // Set to desired delay for testing (e.g., 2000 = 2s), 3500 for production
+    const LOADING_DELAY = import.meta.env.DEV ? 2000 : 3500;
 
     try {
-      const minDelay = new Promise((resolve) => setTimeout(resolve, 3500));
-      const imagesPromise =
-        albumImagesMood === mood && albumImages.length > 0
-          ? Promise.resolve(albumImages)
-          : preloadImages(mood);
+      const minDelay = new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
+
+      // Images should already be in cache from mount fetch.
+      // If not yet in state (race condition), pull from cache now.
+      if (albumImagesMood !== mood || albumImages.length === 0) {
+        const cached = imageCache.current.get(mood);
+        if (cached && cached.length > 0) {
+          setAlbumImages(cached);
+          setAlbumImagesMood(mood);
+          preloadImageFiles(cached, 20);
+        }
+      }
 
       const result = await fetchRecommendation(mood, sliderValue);
       setSong(result);
-      await Promise.all([minDelay, imagesPromise]);
-      setFreezeMarquee(true);
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await minDelay;
       setScreen("result");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch song.";
       setError(message);
-      await new Promise((resolve) => setTimeout(resolve, 3200));
-      setFreezeMarquee(true);
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
       setScreen("result");
     }
-  }, [confirmedMood, popularity, albumImagesMood, albumImages, preloadImages]);
+  }, [confirmedMood, popularity, albumImagesMood, albumImages.length]);
 
   const handleStartOver = () => {
     setScreen("mood");
     setSong(null);
     setError(null);
-    setAlbumImages([]);
-    setAlbumImagesMood(null);
-    setFreezeMarquee(false);
+    // Don't clear albumImages — they're cached in imageCache ref
+    // and will be re-applied when user picks a mood
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]">
+    <div className="relative h-[100svh] max-h-[100svh] overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]">
       {import.meta.env.DEV ? <Agentation /> : null}
 
       {/* Background gradient layers — crossfade between moods */}
@@ -137,30 +185,24 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 1.2, ease: "easeInOut" }}
+          transition={{ duration: appDial.bgTransitionDuration, ease: "easeInOut" }}
         />
       </AnimatePresence>
 
       {/* Live background that responds to slider brightness */}
-        <motion.div
-          className="absolute inset-0"
-          animate={{
+      <motion.div
+        className="absolute inset-0"
+        animate={{
           background: `linear-gradient(to bottom, ${bgFromColor}, ${bgToColor})`,
         }}
-        transition={{ duration: 0.5, ease: "easeInOut" }}
+        transition={{ duration: appDial.bgTransitionDuration, ease: "easeInOut" }}
       />
 
-      {/* Noise Texture Overlay */}
-      <div 
-        className="absolute inset-0 opacity-[0.35] mix-blend-overlay pointer-events-none z-[1]" 
-        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }}
-      />
-      
       {/* Main Container */}
-      <main className="relative z-10 w-full min-h-[100dvh] flex flex-col items-center justify-between px-6 py-6">
-        
+      <main className="relative z-10 w-full h-[100svh] max-h-[100svh] flex flex-col items-center justify-between px-[24px] py-[40px] overflow-hidden gap-6">
+
         {/* Header — always visible */}
-        <header className="w-full flex justify-between items-center text-white/90 font-['Spectral',serif] text-[18px] tracking-wide mt-1 shrink-0">
+        <header className="w-full flex justify-between items-center text-white/90 font-['Spectral',serif] text-[18px] tracking-wide shrink-0">
           <span className="text-[#ffffff] text-[18px]">songrec</span>
           <span className="text-white/90 text-[18px] text-[#ffffff]">curated by tanuj</span>
         </header>
@@ -176,7 +218,7 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                  transition={{ duration: appDial.screenFadeDuration, ease: "easeInOut" }}
                 >
                   <div className="w-full max-w-[400px] mx-auto flex flex-col items-center justify-between flex-1">
                     {/* Content Area */}
@@ -185,22 +227,38 @@ export default function App() {
                         onMoodConfirmed={handleMoodConfirmed}
                         accentColor={accentColor}
                         selectedMood={confirmedMood}
+                        nudge={dialNudge}
                       />
                     </div>
 
                     {/* Bottom Controls */}
                     <div className="w-full flex flex-col items-center gap-4 mt-4 mb-2">
                       <PopularitySlider accentColor={accentColor} onValueChange={setPopularity} />
-                      
+
                       <motion.button
                         className="w-full text-white text-[18px] font-medium py-[14px] rounded-full transition-shadow duration-300 active:scale-[0.98] cursor-pointer"
                         animate={{
                           backgroundColor: accentColor,
                           boxShadow: `0 4px 12px ${accentColor}4D`,
+                          x: btnShake ? [0, -8, 8, -6, 6, -3, 3, 0] : 0,
                         }}
-                        transition={{ duration: 0.8, ease: "easeInOut" }}
-                        onClick={handleRecommend}
-                        disabled={!confirmedMood}
+                        transition={{
+                          duration: 0.8,
+                          ease: "easeInOut",
+                          x: { duration: 0.5, ease: "easeInOut" },
+                        }}
+                        onClick={() => {
+                          if (!confirmedMood) {
+                            setBtnShake(true);
+                            setDialNudge(true);
+                            setTimeout(() => {
+                              setBtnShake(false);
+                              setDialNudge(false);
+                            }, 800);
+                            return;
+                          }
+                          handleRecommend();
+                        }}
                         aria-disabled={!confirmedMood}
                         style={{
                           opacity: confirmedMood ? 1 : 0.55,
@@ -220,15 +278,15 @@ export default function App() {
                   className="absolute inset-0 flex flex-col items-center w-full"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                  exit={{ opacity: 0, transition: { duration: 0.3, ease: "easeOut" } }}
+                  transition={{ duration: appDial.screenFadeDuration, ease: "easeIn" }}
                 >
                   <LoadingScreen
                     mood={confirmedMood || "indie"}
                     popularity={String(popularity)}
                     images={albumImages}
                     highlightImageUrl={song?.album_image ?? null}
-                    freezeMotion={freezeMarquee}
+                    morph={morphDial}
                   />
                 </motion.div>
               )}
@@ -236,13 +294,13 @@ export default function App() {
               {screen === "result" && (
                 <motion.div
                   key="result-screen"
-                  className="absolute inset-0 flex flex-col items-center justify-between w-full"
-                  initial={{ opacity: 0 }}
+                  className="absolute inset-0 flex flex-col items-center w-full"
+                  initial={{ opacity: 1 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.6, ease: "easeInOut" }}
+                  transition={{ duration: appDial.screenFadeDuration, ease: "easeOut" }}
                 >
-                  <div className="w-full max-w-[400px] mx-auto flex flex-col items-center justify-between flex-1">
+                  <div className="w-full max-w-[400px] mx-auto flex flex-col items-center flex-1">
                     <SongResult
                       mood={confirmedMood || "indie"}
                       popularity={popularity}
@@ -250,6 +308,7 @@ export default function App() {
                       onStartOver={handleStartOver}
                       song={song}
                       error={error}
+                      morph={morphDial}
                     />
                   </div>
                 </motion.div>

@@ -1,7 +1,8 @@
 import React, { useState, useRef } from "react";
 import { motion } from "motion/react";
+import { useDialKit } from "dialkit";
 
-const PAD_PCT = 7; // percentage padding on each side so dots don't touch edges
+const PAD_PCT = 7;
 
 interface PopularitySliderProps {
   accentColor?: string;
@@ -9,7 +10,41 @@ interface PopularitySliderProps {
 }
 
 export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: PopularitySliderProps) {
+  const dial = useDialKit("Popularity Slider", {
+    // ── Thumb Size & Scaling ──
+    thumbSize: [20, 12, 40],
+    thumbPressedSize: [26, 16, 50],
+
+    // ── Spring Animation ──
+    springVisualDuration: [0.3, 0.1, 0.6],
+    springBounce: [0.2, 0, 0.8],
+
+    // ── Shadow Properties ──
+    shadowIdleBlur: [12, 2, 20],
+    shadowPressedBlur: [12, 8, 30],
+    shadowPressedGlow: [4, 0, 12],
+    shadowIdleOpacity: [0.25, 0.1, 0.5],
+    shadowPressedOpacity: [0.3, 0.1, 0.6],
+
+    // ── Track Styling ──
+    trackHeight: [36, 24, 48],
+    trackBorderRadius: [30, 12, 40],
+    trackBackdropBlur: [2.2, 0, 5],
+
+    // ── Dot Styling ──
+    dotSize: [4.1, 2, 8],
+
+    // ── Color Transitions ──
+    colorTransitionDuration: [0.4, 0.3, 1.5],
+
+    // ── Gradient Opacity ──
+    gradientStartOpacity: [0.66, 0.3, 1],
+    gradientMidOpacity: [0.6, 0.3, 1],
+    gradientEndOpacity: [0.44, 0.2, 0.8],
+  });
+
   const [value, setValue] = useState(0); // 0 to 3
+  const [isPressed, setIsPressed] = useState(false);
   const trackRef = useRef<HTMLDivElement>(null);
 
   const updateValue = (newValue: number) => {
@@ -19,6 +54,7 @@ export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: Pop
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
+    setIsPressed(true);
     updateFromPointer(e);
   };
 
@@ -42,42 +78,123 @@ export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: Pop
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.releasePointerCapture(e.pointerId);
+    setIsPressed(false);
   };
 
   // Map value into the padded percentage range
   const paddedLeft = (step: number) => PAD_PCT + (step / 3) * (100 - 2 * PAD_PCT);
 
+  // Gradient opacity from dial
+  const toHex = (num: number) => Math.round(num * 255).toString(16).padStart(2, '0');
+  const gradientStart = accentColor + toHex(dial.gradientStartOpacity);
+  const gradientMid = accentColor + toHex(dial.gradientMidOpacity);
+  const gradientEnd = accentColor + toHex(dial.gradientEndOpacity);
+
   return (
     <div className="flex flex-col gap-2 w-full max-w-[360px] px-1 mb-2 mt-4">
       {/* Slider Container */}
-      <div 
+      <div
         ref={trackRef}
         className="relative h-12 w-full flex items-center cursor-pointer select-none touch-none"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={() => setIsPressed(false)}
       >
-        {/* Track Background */}
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[36px] bg-white/30 rounded-[18px] border border-white" />
+        {/* Track Background with gradient border */}
+        <motion.div
+          className="absolute inset-x-0 top-1/2 -translate-y-1/2"
+          animate={{
+            background: `linear-gradient(135deg, ${gradientStart}, ${gradientMid}, ${gradientEnd})`,
+          }}
+          transition={{
+            duration: dial.colorTransitionDuration,
+            ease: [0.4, 0, 0.2, 1],
+          }}
+          style={{
+            height: `${dial.trackHeight}px`,
+            borderRadius: `${dial.trackBorderRadius}px`,
+            padding: 1,
+          }}
+        >
+          <div
+            className="w-full h-full bg-white/20"
+            style={{
+              borderRadius: `${dial.trackBorderRadius}px`,
+              backdropFilter: `blur(${dial.trackBackdropBlur}px)`,
+            }}
+          />
+        </motion.div>
 
         {/* Dots */}
         {[0, 1, 2, 3].map((step) => (
           <motion.div
             key={step}
-            className="absolute top-1/2 -translate-y-1/2 w-[4px] h-[4px] rounded-full z-10"
-            animate={{ backgroundColor: accentColor }}
-            transition={{ duration: 0.8, ease: "easeInOut" }}
-            style={{ left: `${paddedLeft(step)}%`, transform: "translateX(-50%)" }}
+            className="absolute top-1/2 rounded-full z-10"
+            animate={{
+              backgroundColor: accentColor,
+              x: "-50%",
+              y: "-50%",
+            }}
+            transition={{
+              backgroundColor: {
+                duration: dial.colorTransitionDuration,
+                ease: [0.4, 0, 0.2, 1],
+              },
+            }}
+            style={{
+              width: `${dial.dotSize}px`,
+              height: `${dial.dotSize}px`,
+              left: `${paddedLeft(step)}%`,
+            }}
           />
         ))}
 
         {/* Thumb Layer */}
         <motion.div
-          className="absolute top-1/2 -translate-y-1/2 w-[22px] h-[22px] rounded-full z-20 shadow-[0_2px_8px_rgba(0,0,0,0.25)] flex items-center justify-center"
+          className="absolute top-1/2 z-20 flex items-center justify-center rounded-full"
           initial={false}
-          animate={{ left: `${paddedLeft(value)}%`, backgroundColor: accentColor }}
-          style={{ transform: "translateX(-50%)" }}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          animate={{
+            left: `${paddedLeft(value)}%`,
+            x: "-50%",
+            y: "-50%",
+            backgroundColor: accentColor,
+            width: isPressed ? dial.thumbPressedSize : dial.thumbSize,
+            height: isPressed ? dial.thumbPressedSize : dial.thumbSize,
+            boxShadow: isPressed
+              ? `0 0 ${dial.shadowPressedBlur}px ${dial.shadowPressedGlow}px ${accentColor}${toHex(dial.shadowPressedOpacity)}, 0 2px 8px rgba(0,0,0,0.3)`
+              : `0 2px ${dial.shadowIdleBlur}px rgba(0,0,0,${dial.shadowIdleOpacity})`,
+          }}
+          transition={{
+            left: {
+              type: "spring",
+              visualDuration: dial.springVisualDuration,
+              bounce: dial.springBounce,
+            },
+            x: {
+              type: "spring",
+              visualDuration: dial.springVisualDuration,
+              bounce: dial.springBounce,
+            },
+            width: {
+              type: "spring",
+              visualDuration: dial.springVisualDuration,
+              bounce: dial.springBounce,
+            },
+            height: {
+              type: "spring",
+              visualDuration: dial.springVisualDuration,
+              bounce: dial.springBounce,
+            },
+            backgroundColor: {
+              duration: dial.colorTransitionDuration,
+              ease: [0.4, 0, 0.2, 1],
+            },
+            boxShadow: {
+              duration: dial.colorTransitionDuration,
+              ease: [0.4, 0, 0.2, 1],
+            },
+          }}
         />
       </div>
 
