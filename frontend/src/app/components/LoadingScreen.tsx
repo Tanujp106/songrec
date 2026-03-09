@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
+import { useDialKit } from "dialkit";
 import { toThumb } from "@/app/lib/api";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 
@@ -33,8 +34,14 @@ type PerfProfile = {
   enableCycling: boolean;
   /** ms between individual tile swaps */
   swapIntervalMs: number;
+  /** random variance around swap interval in ms */
+  swapJitterMs: number;
   /** how many tiles swap per interval */
   swapsPerTick: number;
+  /** ms for shrink phase (blur+scale down) */
+  shrinkMs: number;
+  /** ms for grow phase (unblur+scale up) */
+  growMs: number;
   heroSize: number;
 };
 
@@ -49,8 +56,11 @@ const FULL_PROFILE: PerfProfile = {
   gridIntroDuration: 0.9,
   gridIntroBlur: 18,
   enableCycling: true,
-  swapIntervalMs: 500,
-  swapsPerTick: 2,
+  swapIntervalMs: 380,
+  swapJitterMs: 100,
+  swapsPerTick: 1,
+  shrinkMs: 220,
+  growMs: 260,
   heroSize: 58,
 };
 
@@ -65,8 +75,11 @@ const LITE_PROFILE: PerfProfile = {
   gridIntroDuration: 0.85,
   gridIntroBlur: 16,
   enableCycling: true,
-  swapIntervalMs: 700,
+  swapIntervalMs: 450,
+  swapJitterMs: 120,
   swapsPerTick: 1,
+  shrinkMs: 200,
+  growMs: 240,
   heroSize: 50,
 };
 
@@ -148,9 +161,12 @@ export function LoadingScreen({
   morph,
 }: LoadingScreenProps) {
   const [isLowPerf, setIsLowPerf] = useState(false);
-  // Per-tile image overrides: tileIndex → { src, key } for crossfade
-  const [tileOverrides, setTileOverrides] = useState<Map<number, { src: string; key: number }>>(new Map());
-  const swapKeyRef = useRef(0);
+  // Per-tile state: src is the displayed image, phase controls the animation
+  const [tileStates, setTileStates] = useState<Map<number, { src: string; phase: 'idle' | 'shrinking' | 'growing' }>>(new Map());
+  const recentSwapIndicesRef = useRef<number[]>([]);
+  const swapTimersRef = useRef<number[]>([]);
+  const tileStatesRef = useRef(tileStates);
+  tileStatesRef.current = tileStates;
 
   useEffect(() => {
     const nav = navigator as Navigator & {
@@ -166,10 +182,54 @@ export function LoadingScreen({
     setIsLowPerf(reducedMotion || saveData || (lowMemory && lowCores));
   }, []);
 
-  const profile = isLowPerf ? LITE_PROFILE : FULL_PROFILE;
+  const baseProfile = isLowPerf ? LITE_PROFILE : FULL_PROFILE;
+
+  // DialKit — live-tuneable in dev, returns defaults in prod
+  const dial = useDialKit("Loading Grid", {
+    "Grid Intro": {
+      gridIntroDuration: [1.15, 0.1, 3, 0.05],
+      gridIntroBlur: [16, 0, 40, 1],
+    },
+    "Tile Swap": {
+      swapIntervalMs: [950, 200, 3000, 50],
+      swapJitterMs: [240, 0, 600, 10],
+      swapsPerTick: [2, 1, 5, 1],
+      shrinkMs: [380, 100, 600, 10],
+      growMs: [340, 100, 600, 10],
+    },
+  });
+
+  const profile: PerfProfile = {
+    ...baseProfile,
+    gridIntroDuration: dial["Grid Intro"].gridIntroDuration as number,
+    gridIntroBlur: dial["Grid Intro"].gridIntroBlur as number,
+    swapIntervalMs: dial["Tile Swap"].swapIntervalMs as number,
+    swapJitterMs: dial["Tile Swap"].swapJitterMs as number,
+    swapsPerTick: dial["Tile Swap"].swapsPerTick as number,
+    shrinkMs: dial["Tile Swap"].shrinkMs as number,
+    growMs: dial["Tile Swap"].growMs as number,
+  };
+
   const maxTiles = profile.cols * profile.rows;
 
-  const { rows, hero, imagePool } = useMemo(() => {
+  // Stable key derived from image content — only reshuffle when actual URLs change
+  const imagesKey = useMemo(() => images.filter(Boolean).join('\0'), [images]);
+
+  const gridDataRef = useRef<{
+    rows: string[][];
+    hero: { rowIndex: number; colIndex: number } | null;
+    imagePool: string[];
+    key: string;
+    cols: number;
+    maxTiles: number;
+  } | null>(null);
+
+  if (
+    !gridDataRef.current ||
+    gridDataRef.current.key !== imagesKey + (highlightImageUrl ?? '') ||
+    gridDataRef.current.cols !== profile.cols ||
+    gridDataRef.current.maxTiles !== maxTiles
+  ) {
     const normalizedImages = images.filter(Boolean);
     const uniqueImages = Array.from(new Set(normalizedImages));
     const highlight = highlightImageUrl ?? null;
@@ -213,74 +273,124 @@ export function LoadingScreen({
       chunked[heroRowIndex] = targetRow;
     }
 
-    return {
+    gridDataRef.current = {
       rows: chunked,
       hero: highlightThumb
         ? { rowIndex: heroRowIndex, colIndex: heroColIndex }
         : null,
       imagePool: shuffledBase,
+      key: imagesKey + (highlightImageUrl ?? ''),
+      cols: profile.cols,
+      maxTiles,
     };
-  }, [images, highlightImageUrl, maxTiles, profile.cols, profile.rows]);
+  }
 
-  // Pick random tiles to swap on each tick
+  const { rows, hero, imagePool } = gridDataRef.current;
+
+  // Pick random tiles and run the 3-phase swap: shrink → change image → grow
   const swapRandomTiles = useCallback(() => {
     if (imagePool.length < 2) return;
     const totalTiles = rows.flat().length;
-    // Build set of hero tile indices to exclude
     const heroIndex = hero ? hero.rowIndex * profile.cols + hero.colIndex : -1;
 
-    setTileOverrides((prev) => {
-      const next = new Map(prev);
-      for (let s = 0; s < profile.swapsPerTick; s++) {
-        let tileIdx: number;
-        // Pick a random non-hero tile
-        do {
-          tileIdx = Math.floor(Math.random() * totalTiles);
-        } while (tileIdx === heroIndex);
+    for (let s = 0; s < profile.swapsPerTick; s++) {
+      let tileIdx: number;
+      let attempts = 0;
+      do {
+        tileIdx = Math.floor(Math.random() * totalTiles);
+        attempts += 1;
+      } while (
+        attempts < 20 &&
+        (tileIdx === heroIndex || recentSwapIndicesRef.current.includes(tileIdx))
+      );
 
-        // Pick a random image different from the tile's current one
-        const currentSrc = next.get(tileIdx)?.src ?? imagePool[tileIdx % imagePool.length];
-        let newSrc: string;
-        let attempts = 0;
-        do {
-          newSrc = imagePool[Math.floor(Math.random() * imagePool.length)];
-          attempts++;
-        } while (newSrc === currentSrc && attempts < 5);
+      recentSwapIndicesRef.current = [...recentSwapIndicesRef.current, tileIdx].slice(-6);
 
-        swapKeyRef.current += 1;
-        next.set(tileIdx, { src: newSrc, key: swapKeyRef.current });
-      }
-      return next;
-    });
-  }, [imagePool, rows, hero, profile.cols, profile.swapsPerTick]);
+      // Phase 1: Start shrinking (blur + scale down) with current image
+      setTileStates((prev) => {
+        const next = new Map(prev);
+        const currentSrc = prev.get(tileIdx)?.src ?? imagePool[tileIdx % imagePool.length];
+        next.set(tileIdx, { src: currentSrc, phase: 'shrinking' });
+        return next;
+      });
 
-  // Start random swapping after the grid intro blur clears
+      // Pick new image
+      const currentSrc = tileStatesRef.current.get(tileIdx)?.src ?? imagePool[tileIdx % imagePool.length];
+      let newSrc: string;
+      let imageAttempts = 0;
+      do {
+        newSrc = imagePool[Math.floor(Math.random() * imagePool.length)];
+        imageAttempts += 1;
+      } while (newSrc === currentSrc && imageAttempts < 5);
+
+      // Phase 2: After shrink completes, swap image and start growing
+      const t1 = window.setTimeout(() => {
+        setTileStates((prev) => {
+          const next = new Map(prev);
+          next.set(tileIdx, { src: newSrc, phase: 'growing' });
+          return next;
+        });
+      }, profile.shrinkMs);
+
+      // Phase 3: After grow completes, set to idle
+      const t2 = window.setTimeout(() => {
+        setTileStates((prev) => {
+          const next = new Map(prev);
+          next.set(tileIdx, { src: newSrc, phase: 'idle' });
+          return next;
+        });
+      }, profile.shrinkMs + profile.growMs);
+
+      swapTimersRef.current.push(t1, t2);
+    }
+  }, [imagePool, rows, hero, profile.cols, profile.swapsPerTick, profile.shrinkMs, profile.growMs]);
+
+  // Start random swapping shortly after grid intro
   useEffect(() => {
     if (!profile.enableCycling || imagePool.length < 2) return;
 
-    // Wait for grid intro to finish before starting swaps
-    const startDelay = window.setTimeout(() => {
-      // Do an initial swap right away
-      swapRandomTiles();
-      const interval = window.setInterval(swapRandomTiles, profile.swapIntervalMs);
-      cleanupRef.current = () => window.clearInterval(interval);
-    }, (profile.gridIntroDuration + 0.3) * 1000);
+    let swapTimer: number | undefined;
+    let cancelled = false;
 
-    const cleanupRef: { current: (() => void) | null } = { current: null };
+    const scheduleNextSwap = () => {
+      const jitter = (Math.random() * 2 - 1) * profile.swapJitterMs;
+      const delay = Math.max(200, profile.swapIntervalMs + jitter);
+      swapTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        swapRandomTiles();
+        scheduleNextSwap();
+      }, delay);
+    };
+
+    // Start swaps right as grid intro finishes (no extra delay)
+    const startDelay = window.setTimeout(() => {
+      swapRandomTiles(); // immediate first swap
+      scheduleNextSwap();
+    }, profile.gridIntroDuration * 1000);
 
     return () => {
+      cancelled = true;
       window.clearTimeout(startDelay);
-      cleanupRef.current?.();
+      if (swapTimer) window.clearTimeout(swapTimer);
+      swapTimersRef.current.forEach((t) => window.clearTimeout(t));
+      swapTimersRef.current = [];
     };
-  }, [imagePool.length, profile.enableCycling, profile.swapIntervalMs, profile.gridIntroDuration, swapRandomTiles]);
+  }, [
+    imagePool.length,
+    profile.enableCycling,
+    profile.gridIntroDuration,
+    profile.swapIntervalMs,
+    profile.swapJitterMs,
+    swapRandomTiles,
+  ]);
 
-  const getTileSrc = (tileIndex: number): { src: string; key: number } => {
-    const override = tileOverrides.get(tileIndex);
-    if (override) return override;
+  const getTileDisplay = (tileIndex: number): { src: string; phase: 'idle' | 'shrinking' | 'growing' } => {
+    const state = tileStates.get(tileIndex);
+    if (state) return state;
     const src = imagePool.length > 0
       ? imagePool[tileIndex % imagePool.length]
       : imgAlbum;
-    return { src, key: 0 };
+    return { src, phase: 'idle' };
   };
 
   return (
@@ -302,7 +412,7 @@ export function LoadingScreen({
         Recommending the perfect one from our hand picked collection
       </motion.p>
 
-      <motion.div
+      <div
         className="flex-1 w-screen flex flex-col justify-center pointer-events-none"
         style={{
           marginTop: 24,
@@ -310,16 +420,22 @@ export function LoadingScreen({
           marginLeft: "calc(50% - 50vw)",
           marginRight: "calc(50% - 50vw)",
           gap: profile.rowGap,
-          willChange: "filter, opacity",
         }}
-        initial={{ opacity: 0, filter: `blur(${profile.gridIntroBlur}px)`, scale: 0.985 }}
-        animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
-        transition={{ duration: profile.gridIntroDuration, ease: "easeOut" }}
       >
-        {rows.map((row, rowIndex) => (
-          <div
+        {rows.map((row, rowIndex) => {
+          const totalRows = rows.length;
+          const perRowDuration = 0.45;
+          const staggerGap = totalRows > 1 ? (profile.gridIntroDuration - perRowDuration) / (totalRows - 1) : 0;
+          const rowDelay = rowIndex * staggerGap;
+
+          return (
+          <motion.div
             key={`row-${rowIndex}`}
             className="relative w-screen flex justify-center items-center"
+            initial={{ opacity: 0, filter: `blur(${profile.gridIntroBlur}px)`, y: 18 }}
+            animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+            transition={{ duration: perRowDuration, delay: rowDelay, ease: "easeOut" }}
+            style={{ willChange: "filter, opacity, transform" }}
           >
             <div
               className="flex justify-center"
@@ -362,7 +478,9 @@ export function LoadingScreen({
                   );
                 }
 
-                const tile = getTileSrc(tileIndex);
+                const tile = getTileDisplay(tileIndex);
+                const isShrinking = tile.phase === 'shrinking';
+                const isGrowing = tile.phase === 'growing';
 
                 return (
                   <div
@@ -370,30 +488,33 @@ export function LoadingScreen({
                     className="relative rounded-full shrink-0 overflow-hidden"
                     style={{ width: profile.tileSize, height: profile.tileSize }}
                   >
-                    <AnimatePresence mode="popLayout" initial={false}>
-                      <motion.div
-                        key={tile.key}
-                        className="absolute inset-0"
-                        initial={{ opacity: 0, scale: 0.92, filter: "blur(6px)" }}
-                        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                        exit={{ opacity: 0, scale: 1.06, filter: "blur(4px)" }}
-                        transition={{ duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }}
-                      >
-                        <ProgressiveImage
-                          src={tile.src}
-                          alt="Album cover art"
-                          className="absolute inset-0 max-w-none object-cover size-full"
-                          loading="lazy"
-                        />
-                      </motion.div>
-                    </AnimatePresence>
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        transform: isShrinking ? 'scale(0.72)' : 'scale(1)',
+                        filter: isShrinking ? 'blur(6px)' : 'blur(0px)',
+                        transition: isShrinking
+                          ? `transform ${profile.shrinkMs}ms ease-in, filter ${profile.shrinkMs}ms ease-in`
+                          : isGrowing
+                            ? `transform ${profile.growMs}ms ease-out, filter ${profile.growMs}ms ease-out`
+                            : 'none',
+                      }}
+                    >
+                      <ProgressiveImage
+                        src={tile.src}
+                        alt="Album cover art"
+                        className="absolute inset-0 max-w-none object-cover size-full"
+                        loading="lazy"
+                      />
+                    </div>
                   </div>
                 );
               })}
             </div>
-          </div>
-        ))}
-      </motion.div>
+          </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
 }
