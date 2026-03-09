@@ -73,6 +73,47 @@ export default function App() {
   const bgFromColor = adjustBrightness(colors.from, brightnessFactor);
   const bgToColor = adjustBrightness(colors.from, brightnessFactor + appDial.bgBrightnessOffset);
 
+  const effectiveMood = confirmedMood ?? "indie";
+
+  const moodTitle = effectiveMood
+    ? `songrec — ${effectiveMood}`
+    : "songrec";
+
+  const moodDescription = effectiveMood
+    ? `songrec picks a ${effectiveMood} track for you based on your mood and popularity slider.`
+    : "songrec — mood-based music recommendations tailored to your vibe.";
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    root.style.setProperty("--app-bg-from", bgFromColor);
+    root.style.setProperty("--app-bg-to", bgToColor);
+    const themeMeta = document.querySelector("meta[name='theme-color']");
+    if (themeMeta) {
+      themeMeta.setAttribute("content", bgFromColor);
+    }
+
+    // Title + description
+    document.title = moodTitle;
+    const descMeta = document.querySelector("meta[name='description']");
+    if (descMeta) {
+      descMeta.setAttribute("content", moodDescription);
+    }
+
+    // Dynamic favicon (SVG data URI)
+    const faviconSvg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' ry='16' fill='${bgFromColor}'/><circle cx='32' cy='32' r='18' fill='rgba(255,255,255,0.9)'/><circle cx='26' cy='28' r='3' fill='#2a2a2a'/><circle cx='38' cy='28' r='3' fill='#2a2a2a'/><path d='M22 38 Q32 45 42 38' stroke='#2a2a2a' stroke-width='3.5' fill='none' stroke-linecap='round'/></svg>`;
+    const faviconUrl = `data:image/svg+xml;utf8,${encodeURIComponent(faviconSvg)}`;
+    const iconLink = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+    if (iconLink) {
+      iconLink.setAttribute("href", faviconUrl);
+    }
+
+    const appleTouch = document.querySelector<HTMLLinkElement>("link[rel='apple-touch-icon']");
+    if (appleTouch) {
+      appleTouch.setAttribute("href", faviconUrl);
+    }
+  }, [bgFromColor, bgToColor]);
+
   // Unique key per mood so AnimatePresence crossfades between moods
   const bgKey = confirmedMood ?? "__default__";
 
@@ -116,8 +157,8 @@ export default function App() {
     setSong(null);
     setScreen("loading");
 
-    // Set to desired delay for testing (e.g., 2000 = 2s), 3500 for production
-    const LOADING_DELAY = import.meta.env.DEV ? 2000 : 3500;
+    // Total loading screen time should be 3s
+    const LOADING_DELAY = 3000;
 
     const minDelay = new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
 
@@ -148,7 +189,7 @@ export default function App() {
   return (
     <div
       className="relative overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]"
-      style={{ minHeight: "100dvh", height: "100dvh" }}
+      style={{ minHeight: "100svh", height: "100dvh" }}
     >
       {import.meta.env.DEV ? <Agentation /> : null}
 
@@ -176,7 +217,7 @@ export default function App() {
       {/* Main Container */}
       <main
         className="relative z-10 w-full flex flex-col items-center justify-between px-[24px] pt-[calc(16px+env(safe-area-inset-top))] pb-[calc(16px+env(safe-area-inset-bottom))] overflow-hidden"
-        style={{ height: "100dvh", gap: "clamp(8px, 1.5svh, 24px)" }}
+        style={{ minHeight: "100svh", height: "100dvh", gap: "clamp(8px, 1.5svh, 24px)" }}
       >
 
         {/* Header — always visible */}

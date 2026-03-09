@@ -18,13 +18,13 @@ function getArcPath(cx: number, cy: number, r: number, startAngle: number, endAn
 }
 
 export const MOOD_COLORS: Record<string, { from: string; to: string }> = {
-  'party': { from: '#2BD94D', to: '#ffffff' },
-  'feel-good': { from: '#D4A017', to: '#ffffff' },
-  'soft': { from: '#C06090', to: '#ffffff' },
-  'indie': { from: '#1A8A7A', to: '#ffffff' },
-  'nostalgic': { from: '#9A6030', to: '#ffffff' },
+  'party': { from: '#14582A', to: '#ffffff' },
+  'feel-good': { from: '#8C6A1C', to: '#ffffff' },
+  'soft': { from: '#803060', to: '#ffffff' },
+  'indie': { from: '#155C50', to: '#ffffff' },
+  'retro': { from: '#704520', to: '#ffffff' },
   'sad': { from: '#2A3580', to: '#ffffff' },
-  'love': { from: '#C02040', to: '#ffffff' },
+  'love': { from: '#901830', to: '#ffffff' },
   'hiphop': { from: '#351850', to: '#ffffff' },
 };
 
@@ -33,7 +33,7 @@ const MOODS = [
   { name: 'feel-good', paths: { lEye: 'M 60 85 Q 75 70 90 85', rEye: 'M 110 85 Q 125 70 140 85', mouth: 'M 70 115 Q 100 145 130 115' } },
   { name: 'soft', paths: { lEye: 'M 60 85 Q 75 90 90 85', rEye: 'M 110 85 Q 125 90 140 85', mouth: 'M 85 125 Q 100 130 115 125' } },
   { name: 'indie', paths: { lEye: 'M 60 82 Q 75 78 90 86', rEye: 'M 110 86 Q 125 78 140 82', mouth: 'M 75 128 Q 100 133 125 126' } },
-  { name: 'nostalgic', paths: { lEye: 'M 60 82 Q 75 70 90 78', rEye: 'M 110 78 Q 125 70 140 82', mouth: 'M 78 128 Q 100 136 122 130' } },
+  { name: 'retro', paths: { lEye: 'M 60 82 Q 75 70 90 78', rEye: 'M 110 78 Q 125 70 140 82', mouth: 'M 78 128 Q 100 136 122 130' } },
   { name: 'sad', paths: { lEye: 'M 60 90 Q 75 75 90 90', rEye: 'M 110 90 Q 125 75 140 90', mouth: 'M 70 135 Q 100 115 130 135' } },
   { name: 'love', paths: { lEye: 'M 60 80 Q 75 55 90 80', rEye: 'M 110 80 Q 125 55 140 80', mouth: 'M 85 125 Q 100 140 115 125' } },
   { name: 'hiphop', paths: { lEye: 'M 60 75 Q 75 85 90 90', rEye: 'M 110 90 Q 125 85 140 75', mouth: 'M 70 130 Q 100 140 130 125' } },
@@ -115,6 +115,9 @@ export function MoodPicker({
   const isDraggingRef = useRef(false);
   const centerRef = useRef({ x: 0, y: 0 });
   const didDragRef = useRef(false);
+  const pillDragActiveRef = useRef(false);
+  const pillDragStartXRef = useRef<number | null>(null);
+  const pillDragIndexRef = useRef(0);
 
   const activeMood = MOODS[selectedMoodIndex];
   const isPulling = tutorialPull !== null;
@@ -141,6 +144,10 @@ export function MoodPicker({
       setHasPicked(true);
     }
   }, [selectedMood]);
+
+  useEffect(() => {
+    pillDragIndexRef.current = selectedMoodIndex;
+  }, [selectedMoodIndex]);
 
   // Speedometer intro → triggers rubber-band after
   useEffect(() => {
@@ -274,6 +281,45 @@ export function MoodPicker({
     }
   };
 
+  const normalizeIndex = (index: number) => {
+    const len = MOODS.length;
+    return ((index % len) + len) % len;
+  };
+
+  const handlePillPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pillDragActiveRef.current = true;
+    pillDragStartXRef.current = e.clientX;
+    setRubberBandActive(false);
+  };
+
+  const handlePillPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pillDragActiveRef.current || pillDragStartXRef.current === null) return;
+
+    const dx = e.clientX - pillDragStartXRef.current;
+    if (Math.abs(dx) < 14) return;
+
+    const step = Math.trunc(dx / 32);
+    if (step === 0) return;
+
+    const nextIndex = normalizeIndex(pillDragIndexRef.current + step);
+    pillDragIndexRef.current = nextIndex;
+    pillDragStartXRef.current += step * 32;
+
+    setSelectedMoodIndex(nextIndex);
+    setHasPicked(true);
+  };
+
+  const handlePillPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    pillDragActiveRef.current = false;
+    pillDragStartXRef.current = null;
+
+    if (hasPicked) {
+      onMoodConfirmed?.(MOODS[selectedMoodIndex].name);
+    }
+  };
+
   // Compute face x/y and transition based on state
   const faceX = isPulling ? tutorialPull.x : dragOffset.x;
   const faceY = isPulling ? tutorialPull.y : dragOffset.y;
@@ -281,6 +327,9 @@ export function MoodPicker({
   // Static outer shadow — doesn't change with drag direction
   const dragMagnitude = Math.sqrt(faceX * faceX + faceY * faceY);
   const staticShadow = "0px 10px 30px rgba(0,0,0,0.15)";
+  const dialShadow = isDragging || isPulling
+    ? `${staticShadow}, ${faceX * 0.65}px ${faceY * 0.65}px 26px rgba(255,255,255,0.35)`
+    : staticShadow;
 
   // Directional inner glow — the side being dragged glows brighter
   // When dragged left (negative faceX), left side glows (positive inset X)
@@ -351,7 +400,7 @@ export function MoodPicker({
       <div
         ref={dialRef}
         className="relative flex items-center justify-center mt-0 touch-none cursor-pointer"
-        style={{ width: "var(--dial-size)", height: "var(--dial-size)" }}
+        style={{ width: "var(--dial-size)", height: "var(--dial-size)", WebkitTapHighlightColor: "transparent" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -465,7 +514,7 @@ export function MoodPicker({
                   : isHovering ? dial.hoverScale : 1,
             boxShadow: nudge
               ? "0px 0px 40px 8px rgba(255,255,255,0.5), 0px 10px 30px rgba(0,0,0,0.15)"
-              : staticShadow,
+              : dialShadow,
           }}
           transition={{
             ...faceTransition,
@@ -478,8 +527,7 @@ export function MoodPicker({
           style={{
             width: "var(--face-size)",
             height: "var(--face-size)",
-            backgroundColor: isDragging ? "#DFDCFF" : "#EBE9FF",
-            transition: "background-color 0.2s ease",
+            backgroundColor: "#EBE9FF",
           }}
         >
           <motion.div
@@ -525,13 +573,17 @@ export function MoodPicker({
 
       {/* Selected Mood Pill */}
       <motion.div
-        className="border border-white/50 backdrop-blur-sm py-[4px] rounded-[130px] relative overflow-hidden flex items-center justify-center"
+        className="border border-white/50 backdrop-blur-sm py-[4px] rounded-[130px] relative overflow-hidden flex items-center justify-center touch-none cursor-pointer"
         style={{ height: "clamp(32px, 5.2svh, 40px)", width: hasPicked ? 160 : "auto", paddingLeft: hasPicked ? 0 : 40, paddingRight: hasPicked ? 0 : 40 }}
         animate={{
           backgroundColor: `${accentColor}1A`,
           boxShadow: `inset 4px 4px 4px ${accentColor}59, 2px 2px 3px ${accentColor}CC`,
         }}
         transition={{ duration: 0.8, ease: "easeInOut" }}
+        onPointerDown={handlePillPointerDown}
+        onPointerMove={handlePillPointerMove}
+        onPointerUp={handlePillPointerUp}
+        onPointerCancel={handlePillPointerUp}
       >
         <AnimatePresence mode="wait">
           {hasPicked ? (
@@ -539,10 +591,10 @@ export function MoodPicker({
               key={activeMood.name}
               className="font-['Spectral',serif] text-white tracking-[0.24px]"
               style={{ fontSize: "clamp(18px, 3.2svh, 24px)" }}
-              initial={{ opacity: 0, filter: "blur(6px)" }}
+              initial={{ opacity: 0, filter: "blur(10px)" }}
               animate={{ opacity: 1, filter: "blur(0px)" }}
-              exit={{ opacity: 0, filter: "blur(6px)" }}
-              transition={{ duration: 0.12, ease: "easeOut" }}
+              exit={{ opacity: 0, filter: "blur(10px)" }}
+              transition={{ duration: 0.24, ease: "easeOut" }}
             >
               {activeMood.name}
             </motion.span>

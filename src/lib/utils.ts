@@ -14,10 +14,19 @@ export function extractPlaylistId(input: string): string | null {
 }
 
 
+const MOOD_ALIASES = new Map<string, string>([
+  ["nostalgic", "retro"],
+]);
+
+export function normalizeMood(input: string): string {
+  const trimmed = input.trim().toLowerCase();
+  return MOOD_ALIASES.get(trimmed) ?? trimmed;
+}
+
 export function normalizeMoodArray(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   const normalized = input
-    .map((m) => (typeof m === "string" ? m.trim().toLowerCase() : ""))
+    .map((m) => (typeof m === "string" ? normalizeMood(m) : ""))
     .filter((m) => m.length > 0);
   return Array.from(new Set(normalized));
 }
@@ -27,7 +36,7 @@ export const ALLOWED_MOODS = new Set([
   "feel-good",
   "soft",
   "indie",
-  "nostalgic",
+  "retro",
   "sad",
   "love",
   "hiphop"

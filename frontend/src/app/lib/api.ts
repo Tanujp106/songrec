@@ -18,7 +18,7 @@ const API_BASE =
 
 const ALL_MOODS = [
   "party", "feel-good", "soft", "indie",
-  "nostalgic", "sad", "love", "hiphop",
+  "retro", "sad", "love", "hiphop",
 ] as const;
 
 const FALLBACK_SONGS: Record<string, SongRecommendation> = {
@@ -74,7 +74,7 @@ const FALLBACK_SONGS: Record<string, SongRecommendation> = {
     release_date: "2013-09-09",
     release_date_precision: "day",
   },
-  nostalgic: {
+  retro: {
     song_name: "Dreams",
     artist: ["Fleetwood Mac"],
     album_image: "https://i.scdn.co/image/ab67616d0000b273e52a59a28efa4773163d9a2b",
@@ -136,7 +136,8 @@ export function toThumb(url: string): string {
 }
 
 function getFallback(mood: string): SongRecommendation {
-  return FALLBACK_SONGS[mood] ?? FALLBACK_SONGS.indie;
+  const key = mood === "nostalgic" ? "retro" : mood;
+  return FALLBACK_SONGS[key] ?? FALLBACK_SONGS.indie;
 }
 
 export async function fetchRecommendation(

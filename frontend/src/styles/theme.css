@@ -39,6 +39,8 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --app-bg-from: #5a54f2;
+  --app-bg-to: #5a54f2;
 }
 
 .dark {
@@ -146,6 +148,9 @@
     min-height: -webkit-fill-available;
     min-height: 100svh;
     min-height: 100dvh;
+    background: linear-gradient(to bottom, var(--app-bg-from), var(--app-bg-to));
+    background-attachment: fixed;
+    background-color: var(--app-bg-from);
   }
 
   /* Safari mobile viewport fix */

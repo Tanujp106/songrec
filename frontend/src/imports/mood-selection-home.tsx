@@ -19,7 +19,7 @@ party
 feel-good
 soft
 indie
-nostalgic
+retro
 sad
 love
 hiphop

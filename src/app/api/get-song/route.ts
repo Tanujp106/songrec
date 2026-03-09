@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
-import { ALLOWED_MOODS, clamp, pickWeightedRandom } from "@/lib/utils";
+import { ALLOWED_MOODS, clamp, pickWeightedRandom, normalizeMood } from "@/lib/utils";
 import { corsHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
@@ -34,15 +34,17 @@ export async function GET(request: Request) {
   try {
     const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
-    const mood = searchParams.get("mood")?.trim().toLowerCase();
+    const moodRaw = searchParams.get("mood")?.trim().toLowerCase();
     const sliderValue = Number(searchParams.get("sliderValue"));
 
-    if (!mood) {
+    if (!moodRaw) {
       return jsonWithCors(
         { error: "mood query param is required" },
         { status: 400 }
       );
     }
+
+    const mood = normalizeMood(moodRaw);
 
     if (!ALLOWED_MOODS.has(mood)) {
       return jsonWithCors(
@@ -65,12 +67,20 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("songs")
       .select(
         "song_name, artist, album_image, spotify_url, popularity, release_year, duration_ms, album_name, album_id, release_date, release_date_precision, moods"
       )
-      .contains("moods", [mood]);
+      .limit(400);
+
+    if (mood === "retro") {
+      query = query.or("moods.cs.{retro},moods.cs.{nostalgic}");
+    } else {
+      query = query.contains("moods", [mood]);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return jsonWithCors(

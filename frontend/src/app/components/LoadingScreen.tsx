@@ -43,12 +43,12 @@ const FULL_PROFILE: PerfProfile = {
   tileGap: 14,
   rowGap: 10,
   titleDelay: 0.15,
-  titleDuration: 0.5,
-  gridIntroDuration: 0.6,
-  gridIntroBlur: 8,
+  titleDuration: 0.55,
+  gridIntroDuration: 0.9,
+  gridIntroBlur: 18,
   enableCycling: true,
-  cycleMs: 2200,
-  cycleBuckets: 4,
+  cycleMs: 800,
+  cycleBuckets: 3,
   heroSize: 58,
 };
 
@@ -58,13 +58,13 @@ const LITE_PROFILE: PerfProfile = {
   tileSize: 46,
   tileGap: 10,
   rowGap: 8,
-  titleDelay: 0.08,
-  titleDuration: 0.35,
-  gridIntroDuration: 0.4,
-  gridIntroBlur: 4,
-  enableCycling: false,
-  cycleMs: 0,
-  cycleBuckets: 1,
+  titleDelay: 0.1,
+  titleDuration: 0.45,
+  gridIntroDuration: 0.85,
+  gridIntroBlur: 16,
+  enableCycling: true,
+  cycleMs: 900,
+  cycleBuckets: 2,
   heroSize: 50,
 };
 
@@ -147,6 +147,7 @@ export function LoadingScreen({
 }: LoadingScreenProps) {
   const [isLowPerf, setIsLowPerf] = useState(false);
   const [cycleStep, setCycleStep] = useState(0);
+  const [gridPulse, setGridPulse] = useState(false);
 
   useEffect(() => {
     const nav = navigator as Navigator & {
@@ -234,6 +235,17 @@ export function LoadingScreen({
     return () => window.clearInterval(interval);
   }, [imagePool.length, profile.cycleMs, profile.enableCycling]);
 
+  useEffect(() => {
+    if (!profile.enableCycling || imagePool.length < 2) {
+      return;
+    }
+
+    setGridPulse(true);
+    const timer = window.setTimeout(() => setGridPulse(false), 220);
+
+    return () => window.clearTimeout(timer);
+  }, [cycleStep, imagePool.length, profile.enableCycling]);
+
   const getTileSrc = (tileIndex: number) => {
     if (imagePool.length === 0) return imgAlbum;
 
@@ -241,15 +253,9 @@ export function LoadingScreen({
       return imagePool[tileIndex % imagePool.length];
     }
 
-    const bucket = tileIndex % profile.cycleBuckets;
-    const progression = Math.floor((cycleStep + bucket) / profile.cycleBuckets);
-    const sourceIndex = (tileIndex + progression) % imagePool.length;
+    const sourceIndex = (tileIndex + cycleStep) % imagePool.length;
     return imagePool[sourceIndex] ?? imgAlbum;
   };
-
-  const activeBucket = profile.enableCycling
-    ? cycleStep % profile.cycleBuckets
-    : -1;
 
   return (
     <div className="w-screen flex flex-col items-center flex-1 pt-[16px] sm:pt-[24px]">
@@ -280,9 +286,13 @@ export function LoadingScreen({
           gap: profile.rowGap,
           willChange: "filter, opacity",
         }}
-        initial={{ opacity: 0, filter: `blur(${profile.gridIntroBlur}px)` }}
-        animate={{ opacity: 1, filter: "blur(0px)" }}
-        transition={{ duration: profile.gridIntroDuration, ease: "easeOut" }}
+        initial={{ opacity: 0, filter: `blur(${profile.gridIntroBlur}px)`, scale: 0.985 }}
+        animate={{
+          opacity: gridPulse ? 0.92 : 1,
+          filter: gridPulse ? "blur(10px)" : "blur(0px)",
+          scale: 1,
+        }}
+        transition={{ duration: gridPulse ? 0.25 : profile.gridIntroDuration, ease: "easeOut" }}
       >
         {rows.map((row, rowIndex) => (
           <div
@@ -331,8 +341,7 @@ export function LoadingScreen({
                 }
 
                 const tileSrc = getTileSrc(tileIndex);
-                const bucket = tileIndex % profile.cycleBuckets;
-                const animatePulse = profile.enableCycling && bucket === activeBucket;
+                const animatePulse = profile.enableCycling && gridPulse;
 
                 return (
                   <motion.div
@@ -341,7 +350,7 @@ export function LoadingScreen({
                     style={{ width: profile.tileSize, height: profile.tileSize, willChange: "transform, opacity" }}
                     animate={
                       animatePulse
-                        ? { opacity: [0.78, 1], scale: [0.985, 1] }
+                        ? { opacity: [0.8, 1], scale: [0.99, 1] }
                         : { opacity: 1, scale: 1 }
                     }
                     transition={{ duration: 0.22, ease: "easeOut" }}
