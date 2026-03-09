@@ -11,8 +11,6 @@ import {
   type SongRecommendation,
 } from "./lib/api";
 import { Agentation } from "agentation";
-import { DialRoot } from "dialkit";
-import "dialkit/styles.css";
 
 const DEFAULT_FROM = "#5A54F2";
 
@@ -47,6 +45,25 @@ function mixHex(a: string, b: string, ratio: number): string {
   const bB = parseInt(b.slice(5, 7), 16);
   const toHex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
   return `#${toHex(aR + (bR - aR) * t)}${toHex(aG + (bG - aG) * t)}${toHex(aB + (bB - aB) * t)}`;
+}
+
+// Dev-only tools - only renders in development
+function DevTools() {
+  const [DialRoot, setDialRoot] = useState<any>(null);
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      import("dialkit/styles.css");
+      import("dialkit").then((mod) => {
+        setDialRoot(() => mod.DialRoot);
+      }).catch(() => {
+        // dialkit not installed, skip
+      });
+    }
+  }, []);
+
+  if (!import.meta.env.DEV || !DialRoot) return null;
+  return <DialRoot position="top-left" />;
 }
 
 export default function App() {
@@ -206,7 +223,7 @@ export default function App() {
       className="relative overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]"
       style={{ minHeight: "100svh", height: "100dvh" }}
     >
-      {import.meta.env.DEV ? <><Agentation /><DialRoot position="top-left" /></> : null}
+      {import.meta.env.DEV ? <><Agentation /><DevTools /></> : null}
 
       {/* Background gradient layers — crossfade between moods */}
       <AnimatePresence>
