@@ -1,8 +1,19 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "motion/react";
-import { useDialKit } from "dialkit";
 import { toThumb } from "@/app/lib/api";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
+
+// Fallback hook that returns defaults when dialkit is not available
+const useDialKitFallback = (_name: string, defaults: Record<string, Record<string, [number, number, number, number]>>) => {
+  return Object.fromEntries(
+    Object.entries(defaults).map(([group, params]) => [
+      group,
+      Object.fromEntries(
+        Object.entries(params).map(([key, [defaultValue]]) => [key, defaultValue])
+      )
+    ])
+  );
+};
 
 interface LoadingScreenProps {
   mood: string;
@@ -185,7 +196,7 @@ export function LoadingScreen({
   const baseProfile = isLowPerf ? LITE_PROFILE : FULL_PROFILE;
 
   // DialKit — live-tuneable in dev, returns defaults in prod
-  const dial = useDialKit("Loading Grid", {
+  const dial = useDialKitFallback("Loading Grid", {
     "Grid Intro": {
       gridIntroDuration: [1.15, 0.1, 3, 0.05],
       gridIntroBlur: [16, 0, 40, 1],

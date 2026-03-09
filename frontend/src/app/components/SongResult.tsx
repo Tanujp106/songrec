@@ -81,16 +81,21 @@ export function SongResult({
             }}
           >
             <motion.div
+              className="absolute inset-0 pointer-events-none"
+              style={{ borderRadius: morph.endRadius }}
+              initial={{ opacity: 0, boxShadow: "0px 0px 0px rgba(19,15,41,0)" }}
+              animate={{ opacity: 1, boxShadow: "0px 9px 14px rgba(19,15,41,0.5)" }}
+              transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
+            />
+
+            <motion.div
               className="absolute inset-0 overflow-hidden"
               layoutId="song-album"
               style={{ borderRadius: morph.endRadius }}
-              initial={{ boxShadow: "0px 0px 0px 0px rgba(19,15,41,0)" }}
-              animate={{ boxShadow: "0px 9px 14px 0px rgba(19,15,41,0.5)" }}
               transition={{
                 layout: {
                   ...morph.spring,
                 },
-                boxShadow: { duration: 0.6, delay: 0.3, ease: "easeOut" },
               }}
             >
               <img

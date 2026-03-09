@@ -13,3 +13,7 @@
 
 # misc
 .DS_Store
+
+# dialkit dev presets
+.dialkit*
+**/dialkit-presets*

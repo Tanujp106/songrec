@@ -11,6 +11,8 @@ import {
   type SongRecommendation,
 } from "./lib/api";
 import { Agentation } from "agentation";
+import { DialRoot } from "dialkit";
+import "dialkit/styles.css";
 
 const DEFAULT_FROM = "#5A54F2";
 
@@ -33,6 +35,18 @@ function adjustBrightness(hex: string, factor: number): string {
   const toHex = (v: number) => clamp(v).toString(16).padStart(2, "0");
 
   return `#${toHex(adjust(r))}${toHex(adjust(g))}${toHex(adjust(b))}`;
+}
+
+function mixHex(a: string, b: string, ratio: number): string {
+  const t = Math.max(0, Math.min(1, ratio));
+  const aR = parseInt(a.slice(1, 3), 16);
+  const aG = parseInt(a.slice(3, 5), 16);
+  const aB = parseInt(a.slice(5, 7), 16);
+  const bR = parseInt(b.slice(1, 3), 16);
+  const bG = parseInt(b.slice(3, 5), 16);
+  const bB = parseInt(b.slice(5, 7), 16);
+  const toHex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
+  return `#${toHex(aR + (bR - aR) * t)}${toHex(aG + (bG - aG) * t)}${toHex(aB + (bB - aB) * t)}`;
 }
 
 export default function App() {
@@ -72,6 +86,7 @@ export default function App() {
   const accentColor = adjustBrightness(colors.from, brightnessFactor);
   const bgFromColor = adjustBrightness(colors.from, brightnessFactor);
   const bgToColor = adjustBrightness(colors.from, brightnessFactor + appDial.bgBrightnessOffset);
+  const browserThemeColor = mixHex(bgFromColor, bgToColor, 0.5);
 
   const effectiveMood = confirmedMood ?? "indie";
 
@@ -90,7 +105,7 @@ export default function App() {
     root.style.setProperty("--app-bg-to", bgToColor);
     const themeMeta = document.querySelector("meta[name='theme-color']");
     if (themeMeta) {
-      themeMeta.setAttribute("content", bgFromColor);
+      themeMeta.setAttribute("content", browserThemeColor);
     }
 
     // Title + description
@@ -112,7 +127,7 @@ export default function App() {
     if (appleTouch) {
       appleTouch.setAttribute("href", faviconUrl);
     }
-  }, [bgFromColor, bgToColor]);
+  }, [bgFromColor, bgToColor, browserThemeColor]);
 
   // Unique key per mood so AnimatePresence crossfades between moods
   const bgKey = confirmedMood ?? "__default__";
@@ -157,8 +172,8 @@ export default function App() {
     setSong(null);
     setScreen("loading");
 
-    // Total loading screen time should be 3s
-    const LOADING_DELAY = 3000;
+    // 60s in dev for tuning, 3s in prod
+    const LOADING_DELAY = import.meta.env.DEV ? 60000 : 3000;
 
     const minDelay = new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
 
@@ -191,7 +206,7 @@ export default function App() {
       className="relative overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]"
       style={{ minHeight: "100svh", height: "100dvh" }}
     >
-      {import.meta.env.DEV ? <Agentation /> : null}
+      {import.meta.env.DEV ? <><Agentation /><DialRoot position="top-left" /></> : null}
 
       {/* Background gradient layers — crossfade between moods */}
       <AnimatePresence>
