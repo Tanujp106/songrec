@@ -21,11 +21,122 @@ const ALL_MOODS = [
   "nostalgic", "sad", "love", "hiphop",
 ] as const;
 
+const FALLBACK_SONGS: Record<string, SongRecommendation> = {
+  party: {
+    song_name: "Levitating",
+    artist: ["Dua Lipa"],
+    album_image: "https://i.scdn.co/image/ab67616d0000b273d4daf28d55fe4197ede848be",
+    spotify_url: "https://open.spotify.com/track/39LLxExYz6ewLAo9BPVTTA",
+    popularity: 85,
+    release_year: 2020,
+    duration_ms: 203064,
+    album_name: "Future Nostalgia",
+    album_id: "5lKlFlReHOLShQKyRv6AL9",
+    release_date: "2020-03-27",
+    release_date_precision: "day",
+  },
+  "feel-good": {
+    song_name: "Here Comes the Sun",
+    artist: ["The Beatles"],
+    album_image: "https://i.scdn.co/image/ab67616d0000b273dc30583ba717007b00cceb25",
+    spotify_url: "https://open.spotify.com/track/6dGnYIeXmHdcikdzNNDMm2",
+    popularity: 82,
+    release_year: 1969,
+    duration_ms: 185733,
+    album_name: "Abbey Road",
+    album_id: "0ETFjACtuP2ADo6LFhL6HN",
+    release_date: "1969-09-26",
+    release_date_precision: "day",
+  },
+  soft: {
+    song_name: "Skinny Love",
+    artist: ["Bon Iver"],
+    album_image: "https://i.scdn.co/image/ab67616d0000b273a7d1a03d31c1a6f665cf6288",
+    spotify_url: "https://open.spotify.com/track/2SrSdSvpminqmStGELCSNd",
+    popularity: 76,
+    release_year: 2008,
+    duration_ms: 218427,
+    album_name: "For Emma, Forever Ago",
+    album_id: "4bJCKmpKEbOmig1lCBMz9r",
+    release_date: "2008-02-19",
+    release_date_precision: "day",
+  },
+  indie: {
+    song_name: "Do I Wanna Know?",
+    artist: ["Arctic Monkeys"],
+    album_image: "https://i.scdn.co/image/ab67616d0000b2730c64e752dec4c08362cc4f3b",
+    spotify_url: "https://open.spotify.com/track/5FVd6KXrgO9B3JPmGaZMoD",
+    popularity: 87,
+    release_year: 2013,
+    duration_ms: 272394,
+    album_name: "AM",
+    album_id: "78bpIziExqiI9qztvNFlQu",
+    release_date: "2013-09-09",
+    release_date_precision: "day",
+  },
+  nostalgic: {
+    song_name: "Dreams",
+    artist: ["Fleetwood Mac"],
+    album_image: "https://i.scdn.co/image/ab67616d0000b273e52a59a28efa4773163d9a2b",
+    spotify_url: "https://open.spotify.com/track/0ofHAoxe9vBkTCp2UQIavz",
+    popularity: 83,
+    release_year: 1977,
+    duration_ms: 254573,
+    album_name: "Rumours",
+    album_id: "1bt6q2SruMsBtcerNVtpZB",
+    release_date: "1977-02-04",
+    release_date_precision: "day",
+  },
+  sad: {
+    song_name: "Motion Sickness",
+    artist: ["Phoebe Bridgers"],
+    album_image: "https://i.scdn.co/image/ab67616d0000b2733e79e3388e41175bf16e20ab",
+    spotify_url: "https://open.spotify.com/track/2bAZSDDKBLkdi3KlnPnEgb",
+    popularity: 73,
+    release_year: 2017,
+    duration_ms: 256200,
+    album_name: "Stranger in the Alps",
+    album_id: "7JHDsNJOiIuhBbKBbGJulq",
+    release_date: "2017-09-22",
+    release_date_precision: "day",
+  },
+  love: {
+    song_name: "At Last",
+    artist: ["Etta James"],
+    album_image: "https://i.scdn.co/image/ab67616d0000b27345c7f4be63e5361c4e8f4e78",
+    spotify_url: "https://open.spotify.com/track/0m71tlxPsjVMPR9g3sJVud",
+    popularity: 78,
+    release_year: 1960,
+    duration_ms: 181333,
+    album_name: "At Last!",
+    album_id: "3lLzlv2v3OPElEO63YVEHX",
+    release_date: "1960-11-15",
+    release_date_precision: "day",
+  },
+  hiphop: {
+    song_name: "m.A.A.d city",
+    artist: ["Kendrick Lamar", "MC Eiht"],
+    album_image: "https://i.scdn.co/image/ab67616d0000b273d28d2ebdedb220e479743797",
+    spotify_url: "https://open.spotify.com/track/4MV4cRGSFWoYmmhdKkGaOH",
+    popularity: 74,
+    release_year: 2012,
+    duration_ms: 340000,
+    album_name: "good kid, m.A.A.d city",
+    album_id: "3DGQ1iZ9XKUQxAUWjfC34w",
+    release_date: "2012-10-22",
+    release_date_precision: "day",
+  },
+};
+
 /** Convert Spotify 640px URL to 64px thumbnail (~2KB instead of ~30KB) */
 export function toThumb(url: string): string {
   return url.includes("ab67616d0000b273")
     ? url.replace("ab67616d0000b273", "ab67616d00004851")
     : url;
+}
+
+function getFallback(mood: string): SongRecommendation {
+  return FALLBACK_SONGS[mood] ?? FALLBACK_SONGS.indie;
 }
 
 export async function fetchRecommendation(
@@ -42,11 +153,8 @@ export async function fetchRecommendation(
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Network error";
-    throw new Error(
-      `Failed to reach API at ${API_BASE || "(same origin)"}: ${message}`
-    );
+  } catch {
+    return getFallback(mood);
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -57,16 +165,7 @@ export async function fetchRecommendation(
     data = await response.text().catch(() => null);
   }
   if (!response.ok) {
-    let message =
-      typeof (data as { error?: string } | null)?.error === "string"
-        ? (data as { error: string }).error
-        : typeof data === "string" && data.length > 0
-          ? data
-          : "Failed to fetch song.";
-    if (typeof data === "string" && /<html|<!doctype/i.test(data)) {
-      message = `Server error (${response.status}). Check API logs.`;
-    }
-    throw new Error(message);
+    return getFallback(mood);
   }
 
   return data as SongRecommendation;

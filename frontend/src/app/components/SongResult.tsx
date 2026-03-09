@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
@@ -12,7 +12,6 @@ interface SongResultProps {
   accentColor: string;
   onStartOver: () => void;
   song: SongRecommendation | null;
-  error?: string | null;
   morph: {
     startRadius: number;
     endRadius: number;
@@ -31,7 +30,6 @@ export function SongResult({
   accentColor,
   onStartOver,
   song,
-  error,
   morph,
 }: SongResultProps) {
   const popLabel = POPULARITY_LABELS[popularity] || "popular";
@@ -40,7 +38,6 @@ export function SongResult({
   const album = song?.album_name ?? "Unknown album";
   const albumImage = song?.album_image ?? imgAlbum;
   const spotifyUrl = song?.spotify_url ?? null;
-  const hasError = !!error;
 
   // Auto-scroll marquee for artist text if it overflows
   const artistTextRef = useRef<HTMLSpanElement>(null);
@@ -59,7 +56,7 @@ export function SongResult({
   return (
     <div className="w-full flex flex-col items-center justify-between flex-1">
       {/* Top content */}
-      <div className="flex flex-col items-center gap-[20px] sm:gap-[32px] w-full mt-auto">
+      <div className="flex flex-col items-center w-full mt-auto" style={{ gap: "clamp(16px, 3svh, 32px)" }}>
         {/* Description text */}
         <motion.div
           className="flex flex-col items-center w-full"
@@ -67,42 +64,33 @@ export function SongResult({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.15 }}
         >
-          <p className="font-['Spectral',serif] text-[24px] text-center text-white leading-[28px] w-full">
-            {hasError ? (
-              "We couldn't fetch a song right now"
-            ) : (
-              <>
-                {`Here's a perfect ${popLabel} `}
-                <br />
-                {`${mood} song for you`}
-              </>
-            )}
+          <p className="font-['Spectral',serif] text-center text-white w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
+            {`Here's a perfect ${popLabel} `}
+            <br />
+            {`${mood} song for you`}
           </p>
-          {hasError && (
-            <p className="text-[14px] text-white/70 text-center mt-2">
-              {error}
-            </p>
-          )}
         </motion.div>
 
         {/* Album art — morph target for layoutId transition */}
         <div className="w-full">
           <div
-            className="relative w-full aspect-square mx-auto overflow-hidden shadow-[0px_9px_14px_0px_rgba(19,15,41,0.5)]"
+            className="relative w-full aspect-square mx-auto"
             style={{
               maxWidth: "min(100%, 76vw)",
               maxHeight: "min(320px, 36vh)",
-              borderRadius: morph.endRadius,
             }}
           >
             <motion.div
               className="absolute inset-0 overflow-hidden"
               layoutId="song-album"
               style={{ borderRadius: morph.endRadius }}
+              initial={{ boxShadow: "0px 0px 0px 0px rgba(19,15,41,0)" }}
+              animate={{ boxShadow: "0px 9px 14px 0px rgba(19,15,41,0.5)" }}
               transition={{
                 layout: {
                   ...morph.spring,
                 },
+                boxShadow: { duration: 0.6, delay: 0.3, ease: "easeOut" },
               }}
             >
               <img
@@ -116,15 +104,16 @@ export function SongResult({
 
         {/* Song info */}
         <motion.div
-          className="flex flex-col items-center gap-[4px] w-full px-[24px]"
+          className="flex flex-col items-center w-full px-[24px]"
+          style={{ gap: "clamp(2px, 0.6svh, 4px)" }}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
         >
-          <p className="font-['Spectral',serif] text-[24px] text-white tracking-[-0.96px] text-center overflow-hidden text-ellipsis whitespace-nowrap w-full leading-[28px]">
+          <p className="font-['Spectral',serif] text-white tracking-[-0.96px] text-center overflow-hidden text-ellipsis whitespace-nowrap w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
             {title}
           </p>
-          <div className="flex flex-col items-center text-[16px] text-white/80 tracking-[-0.48px] w-full">
+          <div className="flex flex-col items-center text-white/80 tracking-[-0.48px] w-full" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
             {/* Artist — single-line with auto-scrolling marquee if overflowing */}
             <div
               ref={artistContainerRef}
@@ -149,14 +138,20 @@ export function SongResult({
 
       {/* Bottom buttons */}
       <motion.div
-        className="flex flex-col gap-[8px] items-center w-full mt-auto"
+        className="flex flex-col items-center w-full mt-auto"
+        style={{ gap: "clamp(6px, 1.2svh, 8px)" }}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.55 }}
       >
         {/* Add to Spotify button */}
         <motion.a
-          className="w-full flex gap-[8px] items-center justify-center py-[12px] sm:py-[16px] rounded-[1000px] text-white cursor-pointer"
+          className="w-full flex gap-[8px] items-center justify-center rounded-[1000px] text-white cursor-pointer"
+          style={{
+            padding: "clamp(10px, 1.8svh, 16px) 0",
+            opacity: spotifyUrl ? 1 : 0.6,
+            pointerEvents: spotifyUrl ? "auto" : "none",
+          }}
           animate={{
             backgroundColor: accentColor,
           }}
@@ -167,7 +162,6 @@ export function SongResult({
           rel={spotifyUrl ? "noopener noreferrer" : undefined}
           aria-disabled={!spotifyUrl}
           aria-label={`Open ${title} on Spotify`}
-          style={{ opacity: spotifyUrl ? 1 : 0.6, pointerEvents: spotifyUrl ? "auto" : "none" }}
         >
           {/* Spotify icon */}
           <div className="overflow-clip relative shrink-0 size-[20px]" aria-hidden="true">
@@ -183,14 +177,15 @@ export function SongResult({
               <path d={svgPaths.p2d573100} fill="white" />
             </svg>
           </div>
-          <span className="font-['Switzer',sans-serif] text-[16px] tracking-[-0.16px] whitespace-nowrap font-medium">
+          <span className="font-['Switzer',sans-serif] tracking-[-0.16px] whitespace-nowrap font-medium" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
             Add to Spotify
           </span>
         </motion.a>
 
         {/* Start over button */}
         <button
-          className="w-full flex gap-[8px] items-center justify-center py-[12px] sm:py-[16px] rounded-[1000px] relative cursor-pointer bg-transparent"
+          className="w-full flex gap-[8px] items-center justify-center rounded-[1000px] relative cursor-pointer bg-transparent"
+          style={{ padding: "clamp(10px, 1.8svh, 16px) 0" }}
           onClick={onStartOver}
         >
           <div
@@ -223,7 +218,7 @@ export function SongResult({
               </g>
             </svg>
           </div>
-          <span className="font-['Switzer',sans-serif] text-[16px] text-white/80 tracking-[-0.16px] whitespace-nowrap font-medium">
+          <span className="font-['Switzer',sans-serif] text-white/80 tracking-[-0.16px] whitespace-nowrap font-medium" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
             Start over
           </span>
         </button>

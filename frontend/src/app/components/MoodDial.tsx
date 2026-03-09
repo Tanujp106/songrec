@@ -54,7 +54,7 @@ export function MoodPicker({
   nudge = false,
 }: MoodPickerProps) {
   const dial = {
-    dragMaxOffset: 28,
+    dragMaxOffset: 24,
     dragScale: 0.88,
     pullScale: 0.95,
     nudgeScale: 1.1,
@@ -314,36 +314,36 @@ export function MoodPicker({
       boxShadow: { ...pullSpring, duration: dial.shadowTransitionDuration },
     }
     : isDragging
-    ? {
-      x: {
-        type: "tween" as const,
-        duration: 0.12,
-        ease: [dial.dragEase.x1, dial.dragEase.y1, dial.dragEase.x2, dial.dragEase.y2] as [number, number, number, number],
-      },
-      y: {
-        type: "tween" as const,
-        duration: 0.12,
-        ease: [dial.dragEase.x1, dial.dragEase.y1, dial.dragEase.x2, dial.dragEase.y2] as [number, number, number, number],
-      },
-      scale: snapSpring,
-      boxShadow: snapSpring,
-    }
-    : {
-      x: snapSpring,
-      y: snapSpring,
-      scale: { ...pullSpring, duration: dial.scaleTransitionDuration },
-      boxShadow: { ...pullSpring, duration: dial.shadowTransitionDuration },
-    };
+      ? {
+        x: {
+          type: "tween" as const,
+          duration: 0.12,
+          ease: [dial.dragEase.x1, dial.dragEase.y1, dial.dragEase.x2, dial.dragEase.y2] as [number, number, number, number],
+        },
+        y: {
+          type: "tween" as const,
+          duration: 0.12,
+          ease: [dial.dragEase.x1, dial.dragEase.y1, dial.dragEase.x2, dial.dragEase.y2] as [number, number, number, number],
+        },
+        scale: snapSpring,
+        boxShadow: snapSpring,
+      }
+      : {
+        x: snapSpring,
+        y: snapSpring,
+        scale: { ...pullSpring, duration: dial.scaleTransitionDuration },
+        boxShadow: { ...pullSpring, duration: dial.shadowTransitionDuration },
+      };
 
   const sizeVars = {
-    "--dial-size": "clamp(220px, 64vw, 280px)",
-    "--face-size": "clamp(150px, 44vw, 190px)",
-    "--glow-size": "clamp(180px, 52vw, 220px)",
+    "--dial-size": "clamp(200px, min(64vw, 36svh), 280px)",
+    "--face-size": "clamp(136px, min(44vw, 24svh), 190px)",
+    "--glow-size": "clamp(160px, min(52vw, 28svh), 220px)",
   } as React.CSSProperties;
 
   return (
-    <div className="flex flex-col gap-8 items-center relative w-full mt-2" style={sizeVars}>
-      <p className="font-['Spectral',serif] text-[24px] sm:text-[26px] text-center text-white w-72 leading-[1.2]">
+    <div className="flex flex-col items-center relative w-full mt-2" style={{ ...sizeVars, gap: "clamp(8px, 1.6svh, 24px)" }}>
+      <p className="font-['Spectral',serif] text-center text-white w-72 leading-[1.2]" style={{ fontSize: "clamp(20px, 3.4svh, 26px)" }}>
         What would you want to listen twin?
       </p>
 
@@ -525,8 +525,8 @@ export function MoodPicker({
 
       {/* Selected Mood Pill */}
       <motion.div
-        className="border border-white/50 backdrop-blur-sm py-[4px] rounded-[130px] mt-1 sm:mt-2 relative overflow-hidden h-[36px] sm:h-[40px] flex items-center justify-center"
-        style={{ width: hasPicked ? 160 : "auto", paddingLeft: hasPicked ? 0 : 40, paddingRight: hasPicked ? 0 : 40 }}
+        className="border border-white/50 backdrop-blur-sm py-[4px] rounded-[130px] relative overflow-hidden flex items-center justify-center"
+        style={{ height: "clamp(32px, 5.2svh, 40px)", width: hasPicked ? 160 : "auto", paddingLeft: hasPicked ? 0 : 40, paddingRight: hasPicked ? 0 : 40 }}
         animate={{
           backgroundColor: `${accentColor}1A`,
           boxShadow: `inset 4px 4px 4px ${accentColor}59, 2px 2px 3px ${accentColor}CC`,
@@ -537,7 +537,8 @@ export function MoodPicker({
           {hasPicked ? (
             <motion.span
               key={activeMood.name}
-              className="font-['Spectral',serif] text-[24px] text-white tracking-[0.24px]"
+              className="font-['Spectral',serif] text-white tracking-[0.24px]"
+              style={{ fontSize: "clamp(18px, 3.2svh, 24px)" }}
               initial={{ opacity: 0, filter: "blur(6px)" }}
               animate={{ opacity: 1, filter: "blur(0px)" }}
               exit={{ opacity: 0, filter: "blur(6px)" }}
@@ -548,7 +549,8 @@ export function MoodPicker({
           ) : (
             <motion.span
               key="__initial__"
-              className="font-['Spectral',serif] text-[18px] text-white/40 tracking-[0.24px]"
+              className="font-['Spectral',serif] text-white/40 tracking-[0.24px]"
+              style={{ fontSize: "clamp(14px, 2.4svh, 18px)" }}
               initial={{ opacity: 0, filter: "blur(6px)" }}
               animate={{ opacity: 1, filter: "blur(0px)" }}
               exit={{ opacity: 0, filter: "blur(6px)" }}

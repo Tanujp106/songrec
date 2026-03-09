@@ -77,7 +77,7 @@ export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: Pop
   const gradientEnd = accentColor + toHex(dial.gradientEndOpacity);
 
   return (
-    <div className="flex flex-col gap-1.5 sm:gap-2 w-full max-w-[360px] px-1 mb-1 sm:mb-2 mt-2 sm:mt-4">
+    <div className="flex flex-col gap-1.5 w-full max-w-[360px] px-1" style={{ marginBottom: "clamp(4px, 0.6svh, 8px)", marginTop: "clamp(8px, 1.2svh, 16px)" }}>
       {/* Slider Container */}
       <div
         ref={trackRef}
@@ -185,7 +185,7 @@ export function PopularitySlider({ accentColor = "#4A30F0", onValueChange }: Pop
       </div>
 
       {/* Labels - moved below slider */}
-      <div className="flex justify-between items-center text-white text-[14px] font-medium px-4 tracking-[0.14px]">
+      <div className="flex justify-between items-center text-white font-medium px-4 tracking-[0.14px]" style={{ fontSize: "clamp(12px, 2svh, 14px)" }}>
         <span>Underrated</span>
         <span>Popular</span>
       </div>

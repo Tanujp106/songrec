@@ -44,8 +44,8 @@ const FULL_PROFILE: PerfProfile = {
   rowGap: 10,
   titleDelay: 0.15,
   titleDuration: 0.5,
-  gridIntroDuration: 0.5,
-  gridIntroBlur: 2,
+  gridIntroDuration: 0.6,
+  gridIntroBlur: 8,
   enableCycling: true,
   cycleMs: 2200,
   cycleBuckets: 4,
@@ -60,8 +60,8 @@ const LITE_PROFILE: PerfProfile = {
   rowGap: 8,
   titleDelay: 0.08,
   titleDuration: 0.35,
-  gridIntroDuration: 0.28,
-  gridIntroBlur: 0,
+  gridIntroDuration: 0.4,
+  gridIntroBlur: 4,
   enableCycling: false,
   cycleMs: 0,
   cycleBuckets: 1,
@@ -156,10 +156,10 @@ export function LoadingScreen({
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const saveData = nav.connection?.saveData === true;
-    const lowMemory = typeof nav.deviceMemory === "number" && nav.deviceMemory <= 4;
-    const lowCores = typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency <= 4;
+    const lowMemory = typeof nav.deviceMemory === "number" && nav.deviceMemory <= 2;
+    const lowCores = typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency <= 2;
 
-    setIsLowPerf(reducedMotion || saveData || lowMemory || lowCores);
+    setIsLowPerf(reducedMotion || saveData || (lowMemory && lowCores));
   }, []);
 
   const profile = isLowPerf ? LITE_PROFILE : FULL_PROFILE;
@@ -261,7 +261,8 @@ export function LoadingScreen({
       `}</style>
 
       <motion.p
-        className="font-['Spectral',serif] text-[24px] text-center text-white leading-[28px] w-full px-6"
+        className="font-['Spectral',serif] text-center text-white w-full px-6"
+        style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: profile.titleDuration, delay: profile.titleDelay }}
@@ -270,13 +271,16 @@ export function LoadingScreen({
       </motion.p>
 
       <motion.div
-        className="flex-1 w-screen flex flex-col justify-center pointer-events-none mt-[24px] sm:mt-[42px] pb-4 sm:pb-6"
+        className="flex-1 w-screen flex flex-col justify-center pointer-events-none"
         style={{
+          marginTop: 24,
+          paddingBottom: "clamp(8px, 1.5svh, 24px)",
           marginLeft: "calc(50% - 50vw)",
           marginRight: "calc(50% - 50vw)",
           gap: profile.rowGap,
+          willChange: "filter, opacity",
         }}
-        initial={{ opacity: 0.92, filter: `blur(${profile.gridIntroBlur}px)` }}
+        initial={{ opacity: 0, filter: `blur(${profile.gridIntroBlur}px)` }}
         animate={{ opacity: 1, filter: "blur(0px)" }}
         transition={{ duration: profile.gridIntroDuration, ease: "easeOut" }}
       >

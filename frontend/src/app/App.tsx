@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import { MoodPicker, MOOD_COLORS } from "./components/MoodDial";
 import { PopularitySlider } from "./components/PopularitySlider";
@@ -40,7 +40,6 @@ export default function App() {
   const [popularity, setPopularity] = useState(0); // 0–3
   const [screen, setScreen] = useState<Screen>("mood");
   const [song, setSong] = useState<SongRecommendation | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [albumImagesMood, setAlbumImagesMood] = useState<string | null>(null);
   const [dialNudge, setDialNudge] = useState(false);
   const [btnShake, setBtnShake] = useState(false);
@@ -114,51 +113,42 @@ export default function App() {
     if (!confirmedMood) return;
     const mood = confirmedMood;
     const sliderValue = Math.round((popularity / 3) * 100);
-    setError(null);
     setSong(null);
     setScreen("loading");
 
     // Set to desired delay for testing (e.g., 2000 = 2s), 3500 for production
     const LOADING_DELAY = import.meta.env.DEV ? 2000 : 3500;
 
-    try {
-      const minDelay = new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
+    const minDelay = new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
 
-      // Images should already be in cache from mount fetch.
-      // If not yet in state (race condition), pull from cache now.
-      if (albumImagesMood !== mood || albumImages.length === 0) {
-        const cached = imageCache.current.get(mood);
-        if (cached && cached.length > 0) {
-          setAlbumImages(cached);
-          setAlbumImagesMood(mood);
-          preloadImageFiles(cached, 20);
-        }
+    // Images should already be in cache from mount fetch.
+    // If not yet in state (race condition), pull from cache now.
+    if (albumImagesMood !== mood || albumImages.length === 0) {
+      const cached = imageCache.current.get(mood);
+      if (cached && cached.length > 0) {
+        setAlbumImages(cached);
+        setAlbumImagesMood(mood);
+        preloadImageFiles(cached, 20);
       }
-
-      const result = await fetchRecommendation(mood, sliderValue);
-      setSong(result);
-      await minDelay;
-      setScreen("result");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to fetch song.";
-      setError(message);
-      await new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
-      setScreen("result");
     }
+
+    const result = await fetchRecommendation(mood, sliderValue);
+    setSong(result);
+    await minDelay;
+    setScreen("result");
   }, [confirmedMood, popularity, albumImagesMood, albumImages.length]);
 
   const handleStartOver = () => {
     setScreen("mood");
     setSong(null);
-    setError(null);
     // Don't clear albumImages — they're cached in imageCache ref
     // and will be re-applied when user picks a mood
   };
 
   return (
     <div
-      className="relative min-h-[100svh] overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]"
-      style={{ minHeight: "100dvh" }}
+      className="relative overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]"
+      style={{ minHeight: "100dvh", height: "100dvh" }}
     >
       {import.meta.env.DEV ? <Agentation /> : null}
 
@@ -185,14 +175,14 @@ export default function App() {
 
       {/* Main Container */}
       <main
-        className="relative z-10 w-full min-h-[100svh] flex flex-col items-center justify-between px-[24px] pt-[calc(24px+env(safe-area-inset-top))] pb-[calc(24px+env(safe-area-inset-bottom))] overflow-hidden gap-6"
-        style={{ minHeight: "100dvh" }}
+        className="relative z-10 w-full flex flex-col items-center justify-between px-[24px] pt-[calc(16px+env(safe-area-inset-top))] pb-[calc(16px+env(safe-area-inset-bottom))] overflow-hidden"
+        style={{ height: "100dvh", gap: "clamp(8px, 1.5svh, 24px)" }}
       >
 
         {/* Header — always visible */}
-        <header className="w-full flex justify-between items-center text-white/90 font-['Spectral',serif] text-[18px] tracking-wide shrink-0">
-          <span className="text-[#ffffff] text-[18px]">songrec</span>
-          <span className="text-white/90 text-[18px] text-[#ffffff]">curated by tanuj</span>
+        <header className="w-full flex justify-between items-center text-white font-['Spectral',serif] tracking-wide shrink-0" style={{ fontSize: "clamp(15px, 2.4svh, 18px)" }}>
+          <span>songrec</span>
+          <span>curated by tanuj</span>
         </header>
 
         {/* Screen content with crossfade transitions */}
@@ -220,11 +210,17 @@ export default function App() {
                     </div>
 
                     {/* Bottom Controls */}
-                    <div className="w-full flex flex-col items-center gap-4 mt-4 mb-2">
+                    <div className="w-full flex flex-col items-center" style={{ gap: "clamp(12px, 2svh, 16px)", marginTop: "clamp(12px, 2svh, 16px)", marginBottom: "clamp(4px, 0.8svh, 8px)" }}>
                       <PopularitySlider accentColor={accentColor} onValueChange={setPopularity} />
 
                       <motion.button
-                        className="w-full text-white text-[18px] font-medium py-[14px] rounded-full transition-shadow duration-300 active:scale-[0.98] cursor-pointer"
+                        className="w-full text-white font-medium rounded-full transition-shadow duration-300 active:scale-[0.98] cursor-pointer"
+                        style={{
+                          fontSize: "clamp(15px, 2.6svh, 18px)",
+                          padding: "clamp(10px, 1.8svh, 14px) 0",
+                          opacity: confirmedMood ? 1 : 0.55,
+                          cursor: confirmedMood ? "pointer" : "not-allowed",
+                        }}
                         animate={{
                           backgroundColor: accentColor,
                           boxShadow: `0 4px 12px ${accentColor}4D`,
@@ -248,10 +244,6 @@ export default function App() {
                           handleRecommend();
                         }}
                         aria-disabled={!confirmedMood}
-                        style={{
-                          opacity: confirmedMood ? 1 : 0.55,
-                          cursor: confirmedMood ? "pointer" : "not-allowed"
-                        }}
                       >
                         Recommend
                       </motion.button>
@@ -295,7 +287,6 @@ export default function App() {
                       accentColor={accentColor}
                       onStartOver={handleStartOver}
                       song={song}
-                      error={error}
                       morph={morphDial}
                     />
                   </div>
