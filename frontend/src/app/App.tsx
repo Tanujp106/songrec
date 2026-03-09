@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
-import { MoodPicker, MOOD_COLORS } from "./components/MoodDial";
+import { MoodPicker, MOOD_COLORS, entranceProps } from "./components/MoodDial";
 import { PopularitySlider } from "./components/PopularitySlider";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { SongResult } from "./components/SongResult";
@@ -221,10 +221,14 @@ export default function App() {
       >
 
         {/* Header — always visible */}
-        <header className="w-full flex justify-between items-center text-white font-['Spectral',serif] tracking-wide shrink-0" style={{ fontSize: "clamp(15px, 2.4svh, 18px)" }}>
+        <motion.header
+          className="w-full flex justify-between items-center text-white font-['Spectral',serif] tracking-wide shrink-0"
+          style={{ fontSize: "clamp(15px, 2.4svh, 18px)" }}
+          {...entranceProps(0)}
+        >
           <span>songrec</span>
           <span>curated by tanuj</span>
-        </header>
+        </motion.header>
 
         {/* Screen content with crossfade transitions */}
         <LayoutGroup>
@@ -247,47 +251,52 @@ export default function App() {
                         accentColor={accentColor}
                         selectedMood={confirmedMood}
                         nudge={dialNudge}
+                        entranceDelay={0.08}
                       />
                     </div>
 
                     {/* Bottom Controls */}
                     <div className="w-full flex flex-col items-center" style={{ gap: "clamp(12px, 2svh, 16px)", marginTop: "clamp(12px, 2svh, 16px)", marginBottom: "clamp(4px, 0.8svh, 8px)" }}>
-                      <PopularitySlider accentColor={accentColor} onValueChange={setPopularity} />
+                      <motion.div className="w-full" {...entranceProps(0.38)}>
+                        <PopularitySlider accentColor={accentColor} onValueChange={setPopularity} />
+                      </motion.div>
 
-                      <motion.button
-                        className="w-full text-white font-medium rounded-full transition-shadow duration-300 active:scale-[0.98] cursor-pointer"
-                        style={{
-                          fontSize: "clamp(15px, 2.6svh, 18px)",
-                          padding: "clamp(10px, 1.8svh, 14px) 0",
-                          opacity: confirmedMood ? 1 : 0.55,
-                          cursor: confirmedMood ? "pointer" : "not-allowed",
-                        }}
-                        animate={{
-                          backgroundColor: accentColor,
-                          boxShadow: `0 4px 12px ${accentColor}4D`,
-                          x: btnShake ? [0, -8, 8, -6, 6, -3, 3, 0] : 0,
-                        }}
-                        transition={{
-                          duration: 0.8,
-                          ease: "easeInOut",
-                          x: { duration: 0.5, ease: "easeInOut" },
-                        }}
-                        onClick={() => {
-                          if (!confirmedMood) {
-                            setBtnShake(true);
-                            setDialNudge(true);
-                            setTimeout(() => {
-                              setBtnShake(false);
-                              setDialNudge(false);
-                            }, 800);
-                            return;
-                          }
-                          handleRecommend();
-                        }}
-                        aria-disabled={!confirmedMood}
-                      >
-                        Recommend
-                      </motion.button>
+                      <motion.div className="w-full" {...entranceProps(0.48)}>
+                        <motion.button
+                          className="w-full text-white font-medium rounded-full transition-shadow duration-300 active:scale-[0.98] cursor-pointer"
+                          style={{
+                            fontSize: "clamp(15px, 2.6svh, 18px)",
+                            padding: "clamp(10px, 1.8svh, 14px) 0",
+                            opacity: confirmedMood ? 1 : 0.55,
+                            cursor: confirmedMood ? "pointer" : "not-allowed",
+                          }}
+                          animate={{
+                            backgroundColor: accentColor,
+                            boxShadow: `0 4px 12px ${accentColor}4D`,
+                            x: btnShake ? [0, -8, 8, -6, 6, -3, 3, 0] : 0,
+                          }}
+                          transition={{
+                            duration: 0.8,
+                            ease: "easeInOut",
+                            x: { duration: 0.5, ease: "easeInOut" },
+                          }}
+                          onClick={() => {
+                            if (!confirmedMood) {
+                              setBtnShake(true);
+                              setDialNudge(true);
+                              setTimeout(() => {
+                                setBtnShake(false);
+                                setDialNudge(false);
+                              }, 800);
+                              return;
+                            }
+                            handleRecommend();
+                          }}
+                          aria-disabled={!confirmedMood}
+                        >
+                          Recommend
+                        </motion.button>
+                      </motion.div>
                     </div>
                   </div>
                 </motion.div>

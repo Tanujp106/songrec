@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
-import { motion } from "motion/react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { toThumb } from "@/app/lib/api";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 
@@ -31,8 +31,10 @@ type PerfProfile = {
   gridIntroDuration: number;
   gridIntroBlur: number;
   enableCycling: boolean;
-  cycleMs: number;
-  cycleBuckets: number;
+  /** ms between individual tile swaps */
+  swapIntervalMs: number;
+  /** how many tiles swap per interval */
+  swapsPerTick: number;
   heroSize: number;
 };
 
@@ -47,8 +49,8 @@ const FULL_PROFILE: PerfProfile = {
   gridIntroDuration: 0.9,
   gridIntroBlur: 18,
   enableCycling: true,
-  cycleMs: 800,
-  cycleBuckets: 3,
+  swapIntervalMs: 500,
+  swapsPerTick: 2,
   heroSize: 58,
 };
 
@@ -63,8 +65,8 @@ const LITE_PROFILE: PerfProfile = {
   gridIntroDuration: 0.85,
   gridIntroBlur: 16,
   enableCycling: true,
-  cycleMs: 900,
-  cycleBuckets: 2,
+  swapIntervalMs: 700,
+  swapsPerTick: 1,
   heroSize: 50,
 };
 
@@ -146,8 +148,9 @@ export function LoadingScreen({
   morph,
 }: LoadingScreenProps) {
   const [isLowPerf, setIsLowPerf] = useState(false);
-  const [cycleStep, setCycleStep] = useState(0);
-  const [gridPulse, setGridPulse] = useState(false);
+  // Per-tile image overrides: tileIndex → { src, key } for crossfade
+  const [tileOverrides, setTileOverrides] = useState<Map<number, { src: string; key: number }>>(new Map());
+  const swapKeyRef = useRef(0);
 
   useEffect(() => {
     const nav = navigator as Navigator & {
@@ -219,42 +222,65 @@ export function LoadingScreen({
     };
   }, [images, highlightImageUrl, maxTiles, profile.cols, profile.rows]);
 
+  // Pick random tiles to swap on each tick
+  const swapRandomTiles = useCallback(() => {
+    if (imagePool.length < 2) return;
+    const totalTiles = rows.flat().length;
+    // Build set of hero tile indices to exclude
+    const heroIndex = hero ? hero.rowIndex * profile.cols + hero.colIndex : -1;
+
+    setTileOverrides((prev) => {
+      const next = new Map(prev);
+      for (let s = 0; s < profile.swapsPerTick; s++) {
+        let tileIdx: number;
+        // Pick a random non-hero tile
+        do {
+          tileIdx = Math.floor(Math.random() * totalTiles);
+        } while (tileIdx === heroIndex);
+
+        // Pick a random image different from the tile's current one
+        const currentSrc = next.get(tileIdx)?.src ?? imagePool[tileIdx % imagePool.length];
+        let newSrc: string;
+        let attempts = 0;
+        do {
+          newSrc = imagePool[Math.floor(Math.random() * imagePool.length)];
+          attempts++;
+        } while (newSrc === currentSrc && attempts < 5);
+
+        swapKeyRef.current += 1;
+        next.set(tileIdx, { src: newSrc, key: swapKeyRef.current });
+      }
+      return next;
+    });
+  }, [imagePool, rows, hero, profile.cols, profile.swapsPerTick]);
+
+  // Start random swapping after the grid intro blur clears
   useEffect(() => {
-    setCycleStep(0);
-  }, [imagePool]);
+    if (!profile.enableCycling || imagePool.length < 2) return;
 
-  useEffect(() => {
-    if (!profile.enableCycling || imagePool.length < 2) {
-      return;
-    }
+    // Wait for grid intro to finish before starting swaps
+    const startDelay = window.setTimeout(() => {
+      // Do an initial swap right away
+      swapRandomTiles();
+      const interval = window.setInterval(swapRandomTiles, profile.swapIntervalMs);
+      cleanupRef.current = () => window.clearInterval(interval);
+    }, (profile.gridIntroDuration + 0.3) * 1000);
 
-    const interval = window.setInterval(() => {
-      setCycleStep((prev) => prev + 1);
-    }, profile.cycleMs);
+    const cleanupRef: { current: (() => void) | null } = { current: null };
 
-    return () => window.clearInterval(interval);
-  }, [imagePool.length, profile.cycleMs, profile.enableCycling]);
+    return () => {
+      window.clearTimeout(startDelay);
+      cleanupRef.current?.();
+    };
+  }, [imagePool.length, profile.enableCycling, profile.swapIntervalMs, profile.gridIntroDuration, swapRandomTiles]);
 
-  useEffect(() => {
-    if (!profile.enableCycling || imagePool.length < 2) {
-      return;
-    }
-
-    setGridPulse(true);
-    const timer = window.setTimeout(() => setGridPulse(false), 220);
-
-    return () => window.clearTimeout(timer);
-  }, [cycleStep, imagePool.length, profile.enableCycling]);
-
-  const getTileSrc = (tileIndex: number) => {
-    if (imagePool.length === 0) return imgAlbum;
-
-    if (!profile.enableCycling || imagePool.length < 2) {
-      return imagePool[tileIndex % imagePool.length];
-    }
-
-    const sourceIndex = (tileIndex + cycleStep) % imagePool.length;
-    return imagePool[sourceIndex] ?? imgAlbum;
+  const getTileSrc = (tileIndex: number): { src: string; key: number } => {
+    const override = tileOverrides.get(tileIndex);
+    if (override) return override;
+    const src = imagePool.length > 0
+      ? imagePool[tileIndex % imagePool.length]
+      : imgAlbum;
+    return { src, key: 0 };
   };
 
   return (
@@ -287,12 +313,8 @@ export function LoadingScreen({
           willChange: "filter, opacity",
         }}
         initial={{ opacity: 0, filter: `blur(${profile.gridIntroBlur}px)`, scale: 0.985 }}
-        animate={{
-          opacity: gridPulse ? 0.92 : 1,
-          filter: gridPulse ? "blur(10px)" : "blur(0px)",
-          scale: 1,
-        }}
-        transition={{ duration: gridPulse ? 0.25 : profile.gridIntroDuration, ease: "easeOut" }}
+        animate={{ opacity: 1, filter: "blur(0px)", scale: 1 }}
+        transition={{ duration: profile.gridIntroDuration, ease: "easeOut" }}
       >
         {rows.map((row, rowIndex) => (
           <div
@@ -340,28 +362,32 @@ export function LoadingScreen({
                   );
                 }
 
-                const tileSrc = getTileSrc(tileIndex);
-                const animatePulse = profile.enableCycling && gridPulse;
+                const tile = getTileSrc(tileIndex);
 
                 return (
-                  <motion.div
+                  <div
                     key={`tile-${rowIndex}-${colIndex}`}
                     className="relative rounded-full shrink-0 overflow-hidden"
-                    style={{ width: profile.tileSize, height: profile.tileSize, willChange: "transform, opacity" }}
-                    animate={
-                      animatePulse
-                        ? { opacity: [0.8, 1], scale: [0.99, 1] }
-                        : { opacity: 1, scale: 1 }
-                    }
-                    transition={{ duration: 0.22, ease: "easeOut" }}
+                    style={{ width: profile.tileSize, height: profile.tileSize }}
                   >
-                    <ProgressiveImage
-                      src={tileSrc}
-                      alt="Album cover art"
-                      className="absolute inset-0 max-w-none object-cover size-full"
-                      loading="lazy"
-                    />
-                  </motion.div>
+                    <AnimatePresence mode="popLayout" initial={false}>
+                      <motion.div
+                        key={tile.key}
+                        className="absolute inset-0"
+                        initial={{ opacity: 0, scale: 0.92, filter: "blur(6px)" }}
+                        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                        exit={{ opacity: 0, scale: 1.06, filter: "blur(4px)" }}
+                        transition={{ duration: 0.45, ease: [0.25, 0.46, 0.45, 0.94] }}
+                      >
+                        <ProgressiveImage
+                          src={tile.src}
+                          alt="Album cover art"
+                          className="absolute inset-0 max-w-none object-cover size-full"
+                          loading="lazy"
+                        />
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
                 );
               })}
             </div>

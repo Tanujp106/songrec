@@ -28,6 +28,13 @@ export const MOOD_COLORS: Record<string, { from: string; to: string }> = {
   'hiphop': { from: '#351850', to: '#ffffff' },
 };
 
+// Neutral default face — gentle, pleasant resting expression
+const DEFAULT_FACE = {
+  lEye: 'M 60 82 Q 75 74 90 82',
+  rEye: 'M 110 82 Q 125 74 140 82',
+  mouth: 'M 80 125 Q 100 135 120 125',
+};
+
 const MOODS = [
   { name: 'party', paths: { lEye: 'M 60 75 Q 75 55 90 75', rEye: 'M 110 75 Q 125 55 140 75', mouth: 'M 65 110 Q 100 160 135 110' } },
   { name: 'feel-good', paths: { lEye: 'M 60 85 Q 75 70 90 85', rEye: 'M 110 85 Q 125 70 140 85', mouth: 'M 70 115 Q 100 145 130 115' } },
@@ -40,18 +47,35 @@ const MOODS = [
 ];
 
 
+const ENTRANCE_EASE = [0.25, 0.46, 0.45, 0.94] as const;
+const ENTRANCE_DURATION = 0.55;
+const ENTRANCE_Y = 18;
+const ENTRANCE_BLUR = 10;
+
+function entranceProps(delay: number) {
+  return {
+    initial: { opacity: 0, y: ENTRANCE_Y, filter: `blur(${ENTRANCE_BLUR}px)` },
+    animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+    transition: { duration: ENTRANCE_DURATION, delay, ease: ENTRANCE_EASE },
+  } as const;
+}
+
 interface MoodPickerProps {
   onMoodConfirmed?: (moodName: string | null) => void;
   accentColor?: string;
   selectedMood?: string | null;
   nudge?: boolean;
+  entranceDelay?: number;
 }
+
+export { entranceProps, ENTRANCE_EASE, ENTRANCE_DURATION };
 
 export function MoodPicker({
   onMoodConfirmed,
   accentColor = "#4A30F0",
   selectedMood = null,
   nudge = false,
+  entranceDelay = 0,
 }: MoodPickerProps) {
   const dial = {
     dragMaxOffset: 24,
@@ -121,6 +145,7 @@ export function MoodPicker({
 
   const activeMood = MOODS[selectedMoodIndex];
   const isPulling = tutorialPull !== null;
+  const activeFace = hasPicked || isPulling ? activeMood.paths : DEFAULT_FACE;
   const showTabs = isDragging || !hasPicked || rubberBandActive;
 
   const pullTargets = useMemo(
@@ -152,22 +177,24 @@ export function MoodPicker({
   // Speedometer intro → triggers rubber-band after
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const TAB_INTERVAL = 70; // ms between each tab appearing
+    const TABS_DONE = MOODS.length * TAB_INTERVAL; // ~560ms
     MOODS.forEach((_, i) => {
       timers.push(
         setTimeout(() => {
           setRevealedTabs(prev => [...prev, i]);
-        }, i * 120)
+        }, i * TAB_INTERVAL)
       );
     });
     timers.push(
-      setTimeout(() => setIntroRunning(false), MOODS.length * 120 + 600)
+      setTimeout(() => setIntroRunning(false), TABS_DONE + 200)
     );
     timers.push(
-      setTimeout(() => setGlowVisible(false), 2200)
+      setTimeout(() => setGlowVisible(false), TABS_DONE + 600)
     );
-    // Start rubber-band after intro completes
+    // Start rubber-band shortly after intro completes
     timers.push(
-      setTimeout(() => setRubberBandActive(true), MOODS.length * 120 + 1000)
+      setTimeout(() => setRubberBandActive(true), TABS_DONE + 300)
     );
     return () => timers.forEach(clearTimeout);
   }, []);
@@ -392,12 +419,16 @@ export function MoodPicker({
 
   return (
     <div className="flex flex-col items-center relative w-full mt-2" style={{ ...sizeVars, gap: "clamp(8px, 1.6svh, 24px)" }}>
-      <p className="font-['Spectral',serif] text-center text-white w-72 leading-[1.2]" style={{ fontSize: "clamp(20px, 3.4svh, 26px)" }}>
+      <motion.p
+        className="font-['Spectral',serif] text-center text-white w-72 leading-[1.2]"
+        style={{ fontSize: "clamp(20px, 3.4svh, 26px)" }}
+        {...entranceProps(entranceDelay)}
+      >
         What would you want to listen twin?
-      </p>
+      </motion.p>
 
       {/* Dial & Face Container */}
-      <div
+      <motion.div
         ref={dialRef}
         className="relative flex items-center justify-center mt-0 touch-none cursor-pointer"
         style={{ width: "var(--dial-size)", height: "var(--dial-size)", WebkitTapHighlightColor: "transparent" }}
@@ -407,6 +438,7 @@ export function MoodPicker({
         onPointerCancel={handlePointerUp}
         onPointerEnter={() => setIsHovering(true)}
         onPointerLeave={() => setIsHovering(false)}
+        {...entranceProps(entranceDelay + 0.1)}
       >
 
         {/* SVG glow filter definition */}
@@ -442,7 +474,6 @@ export function MoodPicker({
             const pathData = getArcPath(140, 140, 130, visualAngle - 20, visualAngle + 20);
             const isActive = hasPicked && i === selectedMoodIndex;
             const isRevealed = revealedTabs.includes(i);
-            const isIntroGlowing = introRunning && isRevealed;
             // Highlight the tab the rubber-band is pulling toward
             const isRubberBandTarget = isPulling && i === tutorialPull.moodIndex;
 
@@ -452,31 +483,28 @@ export function MoodPicker({
                 d={pathData}
                 fill="none"
                 strokeLinecap="round"
-                initial={{ pathLength: 0, opacity: 0, strokeWidth: dial.tabPathStrokeWidth, stroke: "rgba(255,255,255,0.3)" }}
+                pathLength={1}
+                initial={{ opacity: 0, strokeWidth: dial.tabPathStrokeWidth, stroke: "rgba(255,255,255,0.3)" }}
                 animate={{
-                  pathLength: isRevealed ? 1 : 0,
                   opacity: isRevealed ? 1 : 0,
                   stroke: isActive ? "rgba(255,255,255,1)"
                     : isRubberBandTarget ? "rgba(255,255,255,0.9)"
-                      : isIntroGlowing ? "rgba(255,255,255,0.7)"
-                        : "rgba(255,255,255,0.3)",
+                      : "rgba(255,255,255,0.3)",
                   strokeWidth: isActive ? dial.tabPathStrokeWidthActive
                     : isRubberBandTarget ? dial.tabPathStrokeWidthRubberBand
-                      : isIntroGlowing ? dial.tabGlowStrokeWidth
-                        : dial.tabPathStrokeWidth,
+                      : dial.tabPathStrokeWidth,
                 }}
                 transition={{
-                  pathLength: { duration: 0.4, ease: "easeOut" },
-                  opacity: { duration: 0.2 },
+                  opacity: { duration: 0.35, ease: "easeOut" },
                   stroke: { duration: dial.tabStrokeDuration, ease: "easeInOut" },
                   strokeWidth: { duration: dial.tabStrokeDuration, ease: "easeInOut" },
                 }}
                 style={{
                   filter: isActive
                     ? "url(#tab-glow-active)"
-                    : (isIntroGlowing || isRubberBandTarget)
+                    : isRubberBandTarget
                       ? "url(#tab-glow)"
-                      : "none",
+                      : isRevealed && !introRunning ? "none" : "url(#tab-glow)",
                 }}
               />
             );
@@ -513,7 +541,7 @@ export function MoodPicker({
                 : nudge ? dial.nudgeScale
                   : isHovering ? dial.hoverScale : 1,
             boxShadow: nudge
-              ? "0px 0px 40px 8px rgba(255,255,255,0.5), 0px 10px 30px rgba(0,0,0,0.15)"
+              ? "0px 0px 24px 4px rgba(255,255,255,0.3), 0px 10px 30px rgba(0,0,0,0.15)"
               : dialShadow,
           }}
           transition={{
@@ -538,53 +566,54 @@ export function MoodPicker({
 
           <svg className="w-full h-full" viewBox="0 0 200 200">
             <motion.path
-              d={activeMood.paths.lEye}
+              d={activeFace.lEye}
               stroke="#2A2A2A"
               strokeWidth="9"
               strokeLinecap="round"
               fill="none"
               initial={false}
-              animate={{ d: activeMood.paths.lEye }}
+              animate={{ d: activeFace.lEye }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
             />
             <motion.path
-              d={activeMood.paths.rEye}
+              d={activeFace.rEye}
               stroke="#2A2A2A"
               strokeWidth="9"
               strokeLinecap="round"
               fill="none"
               initial={false}
-              animate={{ d: activeMood.paths.rEye }}
+              animate={{ d: activeFace.rEye }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
             />
             <motion.path
-              d={activeMood.paths.mouth}
+              d={activeFace.mouth}
               stroke="#2A2A2A"
               strokeWidth="9"
               strokeLinecap="round"
               fill="none"
               initial={false}
-              animate={{ d: activeMood.paths.mouth }}
+              animate={{ d: activeFace.mouth }}
               transition={{ type: "spring", stiffness: 300, damping: 25 }}
             />
           </svg>
         </motion.div>
-      </div>
+      </motion.div>
 
       {/* Selected Mood Pill */}
-      <motion.div
-        className="border border-white/50 backdrop-blur-sm py-[4px] rounded-[130px] relative overflow-hidden flex items-center justify-center touch-none cursor-pointer"
-        style={{ height: "clamp(32px, 5.2svh, 40px)", width: hasPicked ? 160 : "auto", paddingLeft: hasPicked ? 0 : 40, paddingRight: hasPicked ? 0 : 40 }}
-        animate={{
-          backgroundColor: `${accentColor}1A`,
-          boxShadow: `inset 4px 4px 4px ${accentColor}59, 2px 2px 3px ${accentColor}CC`,
-        }}
-        transition={{ duration: 0.8, ease: "easeInOut" }}
-        onPointerDown={handlePillPointerDown}
-        onPointerMove={handlePillPointerMove}
-        onPointerUp={handlePillPointerUp}
-        onPointerCancel={handlePillPointerUp}
-      >
+      <motion.div {...entranceProps(entranceDelay + 0.2)}>
+        <motion.div
+          className="border border-white/50 backdrop-blur-sm py-[4px] rounded-[130px] relative overflow-hidden flex items-center justify-center touch-none cursor-pointer"
+          style={{ height: "clamp(32px, 5.2svh, 40px)", width: hasPicked ? 160 : "auto", paddingLeft: hasPicked ? 0 : 40, paddingRight: hasPicked ? 0 : 40 }}
+          animate={{
+            backgroundColor: `${accentColor}1A`,
+            boxShadow: `inset 4px 4px 4px ${accentColor}59, 2px 2px 3px ${accentColor}CC`,
+          }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
+          onPointerDown={handlePillPointerDown}
+          onPointerMove={handlePillPointerMove}
+          onPointerUp={handlePillPointerUp}
+          onPointerCancel={handlePillPointerUp}
+        >
         <AnimatePresence mode="wait">
           {hasPicked ? (
             <motion.span
@@ -602,16 +631,17 @@ export function MoodPicker({
             <motion.span
               key="__initial__"
               className="font-['Spectral',serif] text-white/40 tracking-[0.24px]"
-              style={{ fontSize: "clamp(14px, 2.4svh, 18px)" }}
+              style={{ fontSize: "clamp(18px, 3.2svh, 24px)" }}
               initial={{ opacity: 0, filter: "blur(6px)" }}
               animate={{ opacity: 1, filter: "blur(0px)" }}
               exit={{ opacity: 0, filter: "blur(6px)" }}
               transition={{ duration: 0.12, ease: "easeOut" }}
             >
-              Hold & drag to pick a mood
+              Drag to pick a mood
             </motion.span>
           )}
         </AnimatePresence>
+        </motion.div>
       </motion.div>
     </div>
   );
