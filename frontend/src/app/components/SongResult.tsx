@@ -12,28 +12,36 @@ function useGyroParallax(
   maxOffset = 6,
   maxRotation = 3,
 ) {
-  const permissionRef = useRef(false);
+  const [permissionGranted, setPermissionGranted] = useState(false);
 
   // iOS Safari 13+ requires explicit permission from a user gesture
   const requestPermission = useCallback(async () => {
-    if (permissionRef.current) return;
+    if (permissionGranted) return;
+
     const DOE = DeviceOrientationEvent as unknown as {
       requestPermission?: () => Promise<string>;
     };
+
     if (typeof DOE.requestPermission === "function") {
       try {
         const result = await DOE.requestPermission();
-        permissionRef.current = result === "granted";
-      } catch {
-        // denied or unavailable
+        if (result === "granted") {
+          setPermissionGranted(true);
+        }
+      } catch (err) {
+        console.warn("DeviceOrientation permission denied:", err);
       }
+    } else {
+      // Non-iOS or older iOS - permission not required
+      setPermissionGranted(true);
     }
-  }, []);
+  }, [permissionGranted]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!permissionGranted) return; // Wait for permission on iOS
 
     const target = { x: 0, y: 0 };
     const current = { x: 0, y: 0 };
@@ -86,9 +94,104 @@ function useGyroParallax(
       window.clearTimeout(startTimer);
       el.style.transform = "";
     };
-  }, [containerRef, maxOffset, maxRotation]);
+  }, [containerRef, maxOffset, maxRotation, permissionGranted]);
 
   return { requestPermission };
+}
+
+/* ── 3D tilt with cursor/finger tracking and holographic shine ──── */
+function use3DTilt(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  maxRotation = 12,
+) {
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
+  const [isHovering, setIsHovering] = useState(false);
+  const animationFrameRef = useRef<number>();
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const bounds = el.getBoundingClientRect();
+    const centerX = bounds.left + bounds.width / 2;
+    const centerY = bounds.top + bounds.height / 2;
+
+    const handleMove = (clientX: number, clientY: number) => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      animationFrameRef.current = requestAnimationFrame(() => {
+        const bounds = el.getBoundingClientRect();
+        const centerX = bounds.left + bounds.width / 2;
+        const centerY = bounds.top + bounds.height / 2;
+
+        const deltaX = clientX - centerX;
+        const deltaY = clientY - centerY;
+
+        const percentX = deltaX / (bounds.width / 2);
+        const percentY = deltaY / (bounds.height / 2);
+
+        const rotateY = percentX * maxRotation;
+        const rotateX = -percentY * maxRotation;
+
+        const glareX = 50 + percentX * 50;
+        const glareY = 50 + percentY * 50;
+
+        setTilt({ rotateX, rotateY, glareX, glareY });
+      });
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleMouseEnter = () => setIsHovering(true);
+    const handleMouseLeave = () => {
+      setIsHovering(false);
+      setTilt({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      setIsHovering(true);
+      if (e.touches.length > 0) {
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      setIsHovering(false);
+      setTilt({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
+    };
+
+    el.addEventListener("mouseenter", handleMouseEnter);
+    el.addEventListener("mousemove", handleMouseMove);
+    el.addEventListener("mouseleave", handleMouseLeave);
+    el.addEventListener("touchstart", handleTouchStart);
+    el.addEventListener("touchmove", handleTouchMove);
+    el.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      el.removeEventListener("mouseenter", handleMouseEnter);
+      el.removeEventListener("mousemove", handleMouseMove);
+      el.removeEventListener("mouseleave", handleMouseLeave);
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("touchend", handleTouchEnd);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [containerRef, maxRotation]);
+
+  return { tilt, isHovering };
 }
 
 interface SongResultProps {
@@ -127,6 +230,18 @@ export function SongResult({
   // Gyroscope parallax on album art
   const albumContainerRef = useRef<HTMLDivElement>(null);
   const { requestPermission: requestGyroPermission } = useGyroParallax(albumContainerRef);
+  const { tilt, isHovering } = use3DTilt(albumContainerRef);
+
+  // Auto-request permission on mount for non-iOS (Android doesn't need user gesture)
+  useEffect(() => {
+    const DOE = DeviceOrientationEvent as unknown as {
+      requestPermission?: () => Promise<string>;
+    };
+    if (typeof DOE.requestPermission !== "function") {
+      // Not iOS - trigger immediately
+      requestGyroPermission();
+    }
+  }, [requestGyroPermission]);
 
   // Auto-scroll marquee for artist text if it overflows
   const artistTextRef = useRef<HTMLSpanElement>(null);
@@ -160,21 +275,39 @@ export function SongResult({
 
         {/* Album art — morph target for layoutId transition */}
         <div className="w-full">
-          <div
+          <motion.div
             ref={albumContainerRef}
             className="relative aspect-square mx-auto"
             style={{
               width: "min(100%, 76vw, 36vh)",
               willChange: "transform",
+              perspective: "1000px",
+              transformStyle: "preserve-3d",
+            }}
+            animate={{
+              rotateX: tilt.rotateX,
+              rotateY: tilt.rotateY,
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 200,
+              damping: 20,
+              mass: 0.5,
             }}
             onTouchStart={requestGyroPermission}
           >
+            {/* Dynamic shadow that shifts based on tilt */}
             <motion.div
               className="absolute inset-0 pointer-events-none"
               style={{ borderRadius: morph.endRadius }}
               initial={{ opacity: 0, boxShadow: "0px 0px 0px rgba(19,15,41,0)" }}
-              animate={{ opacity: 1, boxShadow: "0px 9px 14px rgba(19,15,41,0.5)" }}
-              transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
+              animate={{
+                opacity: 1,
+                boxShadow: isHovering
+                  ? `${-tilt.rotateY * 0.8}px ${tilt.rotateX * 0.8}px ${18 + Math.abs(tilt.rotateX) + Math.abs(tilt.rotateY)}px rgba(19,15,41,0.6)`
+                  : "0px 9px 14px rgba(19,15,41,0.5)",
+              }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
             />
 
             <motion.div
@@ -192,8 +325,22 @@ export function SongResult({
                 className="absolute inset-0 max-w-none object-cover size-full"
                 src={albumImage}
               />
+
+              {/* Holographic glossy reflection overlay */}
+              <motion.div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: `radial-gradient(circle at ${tilt.glareX}% ${tilt.glareY}%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.1) 30%, transparent 60%)`,
+                  mixBlendMode: "overlay",
+                  opacity: isHovering ? 1 : 0,
+                }}
+                animate={{
+                  opacity: isHovering ? 1 : 0,
+                }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              />
             </motion.div>
-          </div>
+          </motion.div>
         </div>
 
         {/* Song info */}
