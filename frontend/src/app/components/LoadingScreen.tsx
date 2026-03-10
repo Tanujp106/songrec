@@ -19,6 +19,7 @@ interface LoadingScreenProps {
   mood: string;
   popularity: string;
   images?: string[];
+  imagesMood?: string | null;
   highlightImageUrl?: string | null;
   morph: {
     startRadius: number;
@@ -168,6 +169,7 @@ export function LoadingScreen({
   mood,
   popularity,
   images = [],
+  imagesMood = null,
   highlightImageUrl,
   morph,
 }: LoadingScreenProps) {
@@ -178,6 +180,18 @@ export function LoadingScreen({
   const swapTimersRef = useRef<number[]>([]);
   const tileStatesRef = useRef(tileStates);
   tileStatesRef.current = tileStates;
+  const lastImagesKeyRef = useRef<string | null>(null);
+  const frozenMoodRef = useRef<string | null>(null);
+  const [frozenImages, setFrozenImages] = useState<string[]>(() => {
+    if (imagesMood === mood && images.length > 0) {
+      const initial = Array.from(new Set(images.filter(Boolean))).sort();
+      if (initial.length > 0) {
+        frozenMoodRef.current = mood;
+        return initial;
+      }
+    }
+    return [];
+  });
 
   useEffect(() => {
     const nav = navigator as Navigator & {
@@ -195,36 +209,40 @@ export function LoadingScreen({
 
   const baseProfile = isLowPerf ? LITE_PROFILE : FULL_PROFILE;
 
-  // DialKit — live-tuneable in dev, returns defaults in prod
-  const dial = useDialKitFallback("Loading Grid", {
-    "Grid Intro": {
-      gridIntroDuration: [1.15, 0.1, 3, 0.05],
-      gridIntroBlur: [16, 0, 40, 1],
-    },
-    "Tile Swap": {
-      swapIntervalMs: [950, 200, 3000, 50],
-      swapJitterMs: [240, 0, 600, 10],
-      swapsPerTick: [2, 1, 5, 1],
-      shrinkMs: [380, 100, 600, 10],
-      growMs: [340, 100, 600, 10],
-    },
-  });
-
+  // DialKit disabled for LoadingScreen to avoid live tuning glitches.
   const profile: PerfProfile = {
     ...baseProfile,
-    gridIntroDuration: dial["Grid Intro"].gridIntroDuration as number,
-    gridIntroBlur: dial["Grid Intro"].gridIntroBlur as number,
-    swapIntervalMs: dial["Tile Swap"].swapIntervalMs as number,
-    swapJitterMs: dial["Tile Swap"].swapJitterMs as number,
-    swapsPerTick: dial["Tile Swap"].swapsPerTick as number,
-    shrinkMs: dial["Tile Swap"].shrinkMs as number,
-    growMs: dial["Tile Swap"].growMs as number,
   };
 
   const maxTiles = profile.cols * profile.rows;
 
+  const effectiveImages = useMemo(
+    () => (imagesMood === mood ? images : []),
+    [images, imagesMood, mood]
+  );
+
+  const baseImages = useMemo(
+    () => Array.from(new Set(effectiveImages.filter(Boolean))).sort(),
+    [effectiveImages]
+  );
+
+  useEffect(() => {
+    if (imagesMood !== mood) {
+      frozenMoodRef.current = null;
+      if (frozenImages.length > 0) {
+        setFrozenImages([]);
+      }
+      return;
+    }
+    if (baseImages.length === 0) return;
+    if (frozenMoodRef.current !== mood || frozenImages.length === 0) {
+      frozenMoodRef.current = mood;
+      setFrozenImages(baseImages);
+    }
+  }, [baseImages, mood, imagesMood, frozenImages.length]);
+
   // Stable key derived from image content — only reshuffle when actual URLs change
-  const imagesKey = useMemo(() => images.filter(Boolean).join('\0'), [images]);
+  const imagesKey = useMemo(() => frozenImages.join('\0'), [frozenImages]);
 
   const gridDataRef = useRef<{
     rows: string[][];
@@ -237,17 +255,11 @@ export function LoadingScreen({
 
   if (
     !gridDataRef.current ||
-    gridDataRef.current.key !== imagesKey + (highlightImageUrl ?? '') ||
+    gridDataRef.current.key !== imagesKey ||
     gridDataRef.current.cols !== profile.cols ||
     gridDataRef.current.maxTiles !== maxTiles
   ) {
-    const normalizedImages = images.filter(Boolean);
-    const uniqueImages = Array.from(new Set(normalizedImages));
-    const highlight = highlightImageUrl ?? null;
-    const highlightThumb = highlight ? toThumb(highlight) : null;
-
-    const poolWithoutHero = uniqueImages.filter((img) => img !== highlightThumb);
-    const basePool = poolWithoutHero.length > 0 ? poolWithoutHero : [imgAlbum];
+    const basePool = frozenImages.length > 0 ? frozenImages : [imgAlbum];
 
     const shuffledBase = [...basePool].sort(() => Math.random() - 0.5);
     const expanded: string[] = [];
@@ -271,37 +283,46 @@ export function LoadingScreen({
     let heroRowIndex = 0;
     let heroColIndex = 0;
 
-    if (highlightThumb) {
-      const seed = hashString(highlightThumb);
-      heroRowIndex = seed % chunked.length;
-      heroColIndex = Math.min(
-        Math.floor(seed / Math.max(1, chunked.length)) % profile.cols,
-        Math.max(0, profile.cols - 1)
-      );
-
-      const targetRow = chunked[heroRowIndex] ?? [];
-      targetRow[heroColIndex] = highlightThumb;
-      chunked[heroRowIndex] = targetRow;
-    }
+    const seed = hashString(imagesKey.length > 0 ? imagesKey : "seed");
+    heroRowIndex = seed % chunked.length;
+    heroColIndex = Math.min(
+      Math.floor(seed / Math.max(1, chunked.length)) % profile.cols,
+      Math.max(0, profile.cols - 1)
+    );
 
     gridDataRef.current = {
       rows: chunked,
-      hero: highlightThumb
-        ? { rowIndex: heroRowIndex, colIndex: heroColIndex }
-        : null,
+      hero: { rowIndex: heroRowIndex, colIndex: heroColIndex },
       imagePool: shuffledBase,
-      key: imagesKey + (highlightImageUrl ?? ''),
+      key: imagesKey,
       cols: profile.cols,
       maxTiles,
     };
   }
 
   const { rows, hero, imagePool } = gridDataRef.current;
+  const totalTiles = rows.length * profile.cols;
+
+  // When the image list changes (e.g. after fetch), reset tiles to the new base pool
+  useEffect(() => {
+    if (lastImagesKeyRef.current === imagesKey) return;
+    lastImagesKeyRef.current = imagesKey;
+    recentSwapIndicesRef.current = [];
+
+    setTileStates(() => {
+      const next = new Map<number, { src: string; phase: 'idle' | 'shrinking' | 'growing' }>();
+      for (let i = 0; i < totalTiles; i += 1) {
+        const src = imagePool.length > 0 ? imagePool[i % imagePool.length] : imgAlbum;
+        next.set(i, { src, phase: 'idle' });
+      }
+      return next;
+    });
+  }, [imagesKey, imagePool, totalTiles]);
+  const highlightThumb = highlightImageUrl ? toThumb(highlightImageUrl) : null;
 
   // Pick random tiles and run the 3-phase swap: shrink → change image → grow
   const swapRandomTiles = useCallback(() => {
     if (imagePool.length < 2) return;
-    const totalTiles = rows.flat().length;
     const heroIndex = hero ? hero.rowIndex * profile.cols + hero.colIndex : -1;
 
     for (let s = 0; s < profile.swapsPerTick; s++) {
@@ -441,7 +462,7 @@ export function LoadingScreen({
 
           return (
           <motion.div
-            key={`row-${rowIndex}`}
+            key={`row-${rowIndex}-${imagesKey}`}
             className="relative w-screen flex justify-center items-center"
             initial={{ opacity: 0, filter: `blur(${profile.gridIntroBlur}px)`, y: 18 }}
             animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
@@ -460,6 +481,7 @@ export function LoadingScreen({
                   colIndex === hero.colIndex;
 
                 if (isHero) {
+                  const heroSrc = highlightThumb ?? defaultSrc ?? imgAlbum;
                   return (
                     <div
                       key={`hero-${rowIndex}-${colIndex}`}
@@ -479,7 +501,7 @@ export function LoadingScreen({
                         }}
                       >
                         <ProgressiveImage
-                          src={defaultSrc ?? imgAlbum}
+                          src={heroSrc}
                           alt="Featured album cover"
                           className="absolute inset-0 max-w-none object-cover size-full"
                           loading="eager"

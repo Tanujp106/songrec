@@ -1,10 +1,95 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
 
 const POPULARITY_LABELS = ["underrated", "moderate", "well-known", "popular"];
+
+/* ── Gyroscope-driven parallax float (mobile only) ───────────── */
+function useGyroParallax(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  maxOffset = 6,
+  maxRotation = 3,
+) {
+  const permissionRef = useRef(false);
+
+  // iOS Safari 13+ requires explicit permission from a user gesture
+  const requestPermission = useCallback(async () => {
+    if (permissionRef.current) return;
+    const DOE = DeviceOrientationEvent as unknown as {
+      requestPermission?: () => Promise<string>;
+    };
+    if (typeof DOE.requestPermission === "function") {
+      try {
+        const result = await DOE.requestPermission();
+        permissionRef.current = result === "granted";
+      } catch {
+        // denied or unavailable
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const target = { x: 0, y: 0 };
+    const current = { x: 0, y: 0 };
+    let active = false;
+    let baseBeta: number | null = null;
+    let raf: number;
+
+    const SMOOTHING = 0.07;
+    const START_DELAY = 800; // wait for morph animation to settle
+
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      const gamma = e.gamma ?? 0; // left/right tilt
+      const beta = e.beta ?? 0; // front/back tilt
+      // Calibrate: first reading = neutral position
+      if (baseBeta === null) baseBeta = beta;
+      target.x = Math.max(-1, Math.min(1, gamma / 30));
+      target.y = Math.max(-1, Math.min(1, (beta - baseBeta) / 30));
+      active = true;
+    };
+
+    window.addEventListener("deviceorientation", handleOrientation);
+
+    let started = false;
+    const startTimer = window.setTimeout(() => {
+      started = true;
+    }, START_DELAY);
+
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+    const animate = () => {
+      if (active && started) {
+        current.x = lerp(current.x, target.x, SMOOTHING);
+        current.y = lerp(current.y, target.y, SMOOTHING);
+
+        const tx = current.x * maxOffset;
+        const ty = current.y * maxOffset;
+        const rx = -current.y * maxRotation;
+        const ry = current.x * maxRotation;
+
+        el.style.transform =
+          `perspective(800px) translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
+      }
+      raf = requestAnimationFrame(animate);
+    };
+    raf = requestAnimationFrame(animate);
+
+    return () => {
+      window.removeEventListener("deviceorientation", handleOrientation);
+      cancelAnimationFrame(raf);
+      window.clearTimeout(startTimer);
+      el.style.transform = "";
+    };
+  }, [containerRef, maxOffset, maxRotation]);
+
+  return { requestPermission };
+}
 
 interface SongResultProps {
   mood: string;
@@ -39,6 +124,10 @@ export function SongResult({
   const albumImage = song?.album_image ?? imgAlbum;
   const spotifyUrl = song?.spotify_url ?? null;
 
+  // Gyroscope parallax on album art
+  const albumContainerRef = useRef<HTMLDivElement>(null);
+  const { requestPermission: requestGyroPermission } = useGyroParallax(albumContainerRef);
+
   // Auto-scroll marquee for artist text if it overflows
   const artistTextRef = useRef<HTMLSpanElement>(null);
   const artistContainerRef = useRef<HTMLDivElement>(null);
@@ -65,20 +154,20 @@ export function SongResult({
           transition={{ duration: 0.5, delay: 0.15 }}
         >
           <p className="font-['Spectral',serif] text-center text-white w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
-            {`Here's a perfect ${popLabel} `}
-            <br />
-            {`${mood} song for you`}
+            {`Here's a perfect ${mood} song for you`}
           </p>
         </motion.div>
 
         {/* Album art — morph target for layoutId transition */}
         <div className="w-full">
           <div
-            className="relative w-full aspect-square mx-auto"
+            ref={albumContainerRef}
+            className="relative aspect-square mx-auto"
             style={{
-              maxWidth: "min(100%, 76vw)",
-              maxHeight: "min(320px, 36vh)",
+              width: "min(100%, 76vw, 36vh)",
+              willChange: "transform",
             }}
+            onTouchStart={requestGyroPermission}
           >
             <motion.div
               className="absolute inset-0 pointer-events-none"
@@ -156,12 +245,15 @@ export function SongResult({
             padding: "clamp(10px, 1.8svh, 16px) 0",
             opacity: spotifyUrl ? 1 : 0.6,
             pointerEvents: spotifyUrl ? "auto" : "none",
+            WebkitTapHighlightColor: "transparent",
           }}
           animate={{
             backgroundColor: accentColor,
           }}
           transition={{ duration: 0.8, ease: "easeInOut" }}
-          whileTap={{ scale: 0.98 }}
+          whileHover={spotifyUrl ? { scale: 1.01 } : undefined}
+          whileTap={spotifyUrl ? { scale: 0.98, y: 1 } : undefined}
+          transition={{ duration: 0.18, ease: "easeOut" }}
           href={spotifyUrl ?? undefined}
           target={spotifyUrl ? "_blank" : undefined}
           rel={spotifyUrl ? "noopener noreferrer" : undefined}
@@ -188,9 +280,12 @@ export function SongResult({
         </motion.a>
 
         {/* Start over button */}
-        <button
+        <motion.button
           className="w-full flex gap-[8px] items-center justify-center rounded-[1000px] relative cursor-pointer bg-transparent"
-          style={{ padding: "clamp(10px, 1.8svh, 16px) 0" }}
+          style={{ padding: "clamp(10px, 1.8svh, 16px) 0", WebkitTapHighlightColor: "transparent" }}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98, y: 1 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
           onClick={onStartOver}
         >
           <div
@@ -226,7 +321,7 @@ export function SongResult({
           <span className="font-['Switzer',sans-serif] text-white/80 tracking-[-0.16px] whitespace-nowrap font-medium" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
             Start over
           </span>
-        </button>
+        </motion.button>
       </motion.div>
     </div>
   );

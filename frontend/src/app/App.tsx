@@ -189,8 +189,8 @@ export default function App() {
     setSong(null);
     setScreen("loading");
 
-    // 60s in dev for tuning, 3s in prod
-    const LOADING_DELAY = import.meta.env.DEV ? 60000 : 3000;
+    // 60s in dev for tuning, 2.5s in prod
+    const LOADING_DELAY = import.meta.env.DEV ? 2000 : 2000;
 
     const minDelay = new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
 
@@ -259,7 +259,17 @@ export default function App() {
           {...entranceProps(0)}
         >
           <span>songrec</span>
-          <span>curated by tanuj</span>
+          <span>
+            curated by{" "}
+            <a
+              href="https://www.tanujpatel.design/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              tanuj
+            </a>
+          </span>
         </motion.header>
 
         {/* Screen content with crossfade transitions */}
@@ -295,12 +305,13 @@ export default function App() {
 
                       <motion.div className="w-full" {...entranceProps(0.48)}>
                         <motion.button
-                          className="w-full text-white font-medium rounded-full transition-shadow duration-300 active:scale-[0.98] cursor-pointer"
+                          className="w-full text-white font-medium rounded-full transition-shadow duration-300 cursor-pointer"
                           style={{
                             fontSize: "clamp(15px, 2.6svh, 18px)",
                             padding: "clamp(10px, 1.8svh, 14px) 0",
                             opacity: confirmedMood ? 1 : 0.55,
                             cursor: confirmedMood ? "pointer" : "not-allowed",
+                            WebkitTapHighlightColor: "transparent",
                           }}
                           animate={{
                             backgroundColor: accentColor,
@@ -312,6 +323,8 @@ export default function App() {
                             ease: "easeInOut",
                             x: { duration: 0.5, ease: "easeInOut" },
                           }}
+                          whileHover={confirmedMood ? { scale: 1.01 } : undefined}
+                          whileTap={confirmedMood ? { scale: 0.98, y: 1 } : undefined}
                           onClick={() => {
                             if (!confirmedMood) {
                               setBtnShake(true);
@@ -347,6 +360,7 @@ export default function App() {
                     mood={confirmedMood || "indie"}
                     popularity={String(popularity)}
                     images={albumImages}
+                    imagesMood={albumImagesMood}
                     highlightImageUrl={song?.album_image ?? null}
                     morph={morphDial}
                   />
