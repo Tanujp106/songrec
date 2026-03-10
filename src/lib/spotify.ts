@@ -2,8 +2,9 @@ import { requireEnv } from "./env";
 
 const SPOTIFY_CLIENT_ID = requireEnv("SPOTIFY_CLIENT_ID");
 const SPOTIFY_CLIENT_SECRET = requireEnv("SPOTIFY_CLIENT_SECRET");
+const SPOTIFY_REFRESH_TOKEN = (process.env.SPOTIFY_REFRESH_TOKEN ?? "").trim();
 
-let cachedToken: { accessToken: string; expiresAt: number } | null = null;
+let cachedToken: { accessToken: string; expiresAt: number; type: "user" | "app" } | null = null;
 
 export async function getSpotifyAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
@@ -14,13 +15,21 @@ export async function getSpotifyAccessToken(): Promise<string> {
     `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`
   ).toString("base64");
 
+  const body = new URLSearchParams();
+  if (SPOTIFY_REFRESH_TOKEN.length > 0) {
+    body.set("grant_type", "refresh_token");
+    body.set("refresh_token", SPOTIFY_REFRESH_TOKEN);
+  } else {
+    body.set("grant_type", "client_credentials");
+  }
+
   const response = await fetch("https://accounts.spotify.com/api/token", {
     method: "POST",
     headers: {
       Authorization: `Basic ${authHeader}`,
       "Content-Type": "application/x-www-form-urlencoded"
     },
-    body: new URLSearchParams({ grant_type: "client_credentials" }).toString()
+    body: body.toString()
   });
 
   if (!response.ok) {
@@ -35,7 +44,8 @@ export async function getSpotifyAccessToken(): Promise<string> {
 
   cachedToken = {
     accessToken: data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000
+    expiresAt: Date.now() + data.expires_in * 1000,
+    type: SPOTIFY_REFRESH_TOKEN.length > 0 ? "user" : "app"
   };
 
   return cachedToken.accessToken;

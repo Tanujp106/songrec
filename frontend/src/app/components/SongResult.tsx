@@ -342,10 +342,13 @@ export function SongResult({
           animate={{
             backgroundColor: accentColor,
           }}
-          transition={{ duration: 0.8, ease: "easeInOut" }}
+          transition={{
+            backgroundColor: { duration: 0.8, ease: "easeInOut" },
+            scale: { duration: 0.18, ease: "easeOut" },
+            y: { duration: 0.18, ease: "easeOut" },
+          }}
           whileHover={spotifyUrl ? { scale: 1.01 } : undefined}
           whileTap={spotifyUrl ? { scale: 0.98, y: 1 } : undefined}
-          transition={{ duration: 0.18, ease: "easeOut" }}
           href={spotifyUrl ?? undefined}
           target={spotifyUrl ? "_blank" : undefined}
           rel={spotifyUrl ? "noopener noreferrer" : undefined}
@@ -377,7 +380,10 @@ export function SongResult({
           style={{ padding: "clamp(10px, 1.8svh, 16px) 0", WebkitTapHighlightColor: "transparent" }}
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.98, y: 1 }}
-          transition={{ duration: 0.18, ease: "easeOut" }}
+          transition={{
+            scale: { duration: 0.18, ease: "easeOut" },
+            y: { duration: 0.18, ease: "easeOut" },
+          }}
           onClick={onStartOver}
         >
           <div
