@@ -11,6 +11,7 @@ import {
   type SongRecommendation,
 } from "./lib/api";
 import { Agentation } from "agentation";
+import { Analytics } from "@vercel/analytics/react";
 
 const DEFAULT_FROM = "#5A54F2";
 
@@ -393,6 +394,7 @@ export default function App() {
         </LayoutGroup>
 
       </main>
+      <Analytics />
     </div>
   );
 }
