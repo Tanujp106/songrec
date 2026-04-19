@@ -5,15 +5,16 @@ import { corsHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
 
-function jsonWithCors(body: unknown, init?: ResponseInit) {
+function jsonWithCors(body: unknown, init?: ResponseInit, requestOrigin?: string | null) {
   return NextResponse.json(body, {
     ...init,
-    headers: { ...(init?.headers ?? {}), ...corsHeaders() }
+    headers: { ...(init?.headers ?? {}), ...corsHeaders(requestOrigin) }
   });
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(request: Request) {
+  const origin = request.headers.get("origin");
+  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) });
 }
 
 function shuffle<T>(items: T[]): T[] {
@@ -27,6 +28,7 @@ function shuffle<T>(items: T[]): T[] {
 
 export async function GET(request: Request) {
   try {
+    const origin = request.headers.get("origin");
     const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     const moodRaw = searchParams.get("mood")?.trim().toLowerCase();
@@ -36,7 +38,8 @@ export async function GET(request: Request) {
     if (!moodRaw) {
       return jsonWithCors(
         { error: "mood query param is required" },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
@@ -45,7 +48,8 @@ export async function GET(request: Request) {
     if (!ALLOWED_MOODS.has(mood)) {
       return jsonWithCors(
         { error: "mood must be one of the allowed values" },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
@@ -66,7 +70,8 @@ export async function GET(request: Request) {
     if (error) {
       return jsonWithCors(
         { error: `Supabase query failed: ${error.message}` },
-        { status: 500 }
+        { status: 500 },
+        origin
       );
     }
 
@@ -76,10 +81,11 @@ export async function GET(request: Request) {
     ) as string[];
 
     const shuffled = shuffle(images);
-    return jsonWithCors({ images: shuffled.slice(0, limit) });
+    return jsonWithCors({ images: shuffled.slice(0, limit) }, undefined, origin);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[get-album-images] Unhandled error:", message);
-    return jsonWithCors({ error: message }, { status: 500 });
+    const origin = request.headers.get("origin");
+    return jsonWithCors({ error: message }, { status: 500 }, origin);
   }
 }

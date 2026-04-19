@@ -9,11 +9,12 @@ const SPOTIFY_REDIRECT_URI =
   process.env.SPOTIFY_REDIRECT_URI ??
   "http://127.0.0.1:3000/api/spotify/callback";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const origin = request.headers.get("origin");
   if (!SPOTIFY_CLIENT_ID) {
     return new NextResponse("Missing SPOTIFY_CLIENT_ID", {
       status: 500,
-      headers: corsHeaders()
+      headers: corsHeaders(origin)
     });
   }
 

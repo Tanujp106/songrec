@@ -13,15 +13,16 @@ import { corsHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
 
-function jsonWithCors(body: unknown, init?: ResponseInit) {
+function jsonWithCors(body: unknown, init?: ResponseInit, requestOrigin?: string | null) {
   return NextResponse.json(body, {
     ...init,
-    headers: { ...(init?.headers ?? {}), ...corsHeaders() }
+    headers: { ...(init?.headers ?? {}), ...corsHeaders(requestOrigin) }
   });
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(request: Request) {
+  const origin = request.headers.get("origin");
+  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) });
 }
 
 type SpotifyTrackObject = {
@@ -198,6 +199,7 @@ async function fetchAlbumsBatch(
 
 export async function POST(request: Request) {
   try {
+    const origin = request.headers.get("origin");
     const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     const logProgress =
@@ -214,7 +216,8 @@ export async function POST(request: Request) {
     if (typeof playlistUrl !== "string") {
       return jsonWithCors(
         { error: "playlist_url (string) is required." },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
     if (overwriteMoods && moods.length === 0) {
@@ -223,7 +226,8 @@ export async function POST(request: Request) {
           error:
             "overwrite_moods=true requires a non-empty moods array in the request body."
         },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
@@ -231,7 +235,8 @@ export async function POST(request: Request) {
     if (!playlistId) {
       return jsonWithCors(
         { error: "Invalid playlist_url. Could not extract playlist ID." },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
@@ -248,10 +253,11 @@ export async function POST(request: Request) {
               "Spotify returned 403 Forbidden for this playlist. If you configured OAuth for import (Authorization Code Flow), set SPOTIFY_REFRESH_TOKEN and retry. Otherwise this playlist likely requires user context and cannot be imported with Client Credentials alone.",
             details: message
           },
-          { status: 403 }
+          { status: 403 },
+          origin
         );
       }
-      return jsonWithCors({ error: message }, { status: 500 });
+      return jsonWithCors({ error: message }, { status: 500 }, origin);
     }
 
     const recordMap = new Map<string, SongInsert>();
@@ -362,7 +368,8 @@ export async function POST(request: Request) {
     if (records.length === 0) {
       return jsonWithCors(
         { error: "No valid tracks found in playlist.", skipped },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
@@ -382,7 +389,8 @@ export async function POST(request: Request) {
       if (error) {
         return jsonWithCors(
           { error: `Supabase select failed: ${error.message}` },
-          { status: 500 }
+          { status: 500 },
+          origin
         );
       }
 
@@ -415,7 +423,8 @@ export async function POST(request: Request) {
       if (error) {
         return jsonWithCors(
           { error: `Supabase upsert failed: ${error.message}` },
-          { status: 500 }
+          { status: 500 },
+          origin
         );
       }
     }
@@ -432,9 +441,10 @@ export async function POST(request: Request) {
       updated,
       skipped,
       total: finalRecords.length
-    });
+    }, undefined, origin);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return jsonWithCors({ error: message }, { status: 500 });
+    const origin = request.headers.get("origin");
+    return jsonWithCors({ error: message }, { status: 500 }, origin);
   }
 }

@@ -4,7 +4,8 @@ import { spotifyGet } from "@/lib/spotify";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const origin = request.headers.get("origin");
   const hasRefreshToken = (process.env.SPOTIFY_REFRESH_TOKEN ?? "").trim().length > 0;
   let meOk = false;
   let meError: string | null = null;
@@ -26,6 +27,6 @@ export async function GET() {
       me_ok: meOk,
       me_error: meError
     },
-    { headers: corsHeaders() }
+    { headers: corsHeaders(origin) }
   );
 }

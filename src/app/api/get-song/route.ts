@@ -21,15 +21,16 @@ type SessionHistory = {
 const sessionStore = new Map<string, SessionHistory>();
 let lastCleanup = 0;
 
-function jsonWithCors(body: unknown, init?: ResponseInit) {
+function jsonWithCors(body: unknown, init?: ResponseInit, requestOrigin?: string | null) {
   return NextResponse.json(body, {
     ...init,
-    headers: { ...(init?.headers ?? {}), ...corsHeaders() }
+    headers: { ...(init?.headers ?? {}), ...corsHeaders(requestOrigin) }
   });
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: corsHeaders() });
+export async function OPTIONS(request: Request) {
+  const origin = request.headers.get("origin");
+  return new NextResponse(null, { status: 204, headers: corsHeaders(origin) });
 }
 
 type SongRow = {
@@ -97,6 +98,7 @@ function pickWeighted<T>(items: T[], weights: number[]): T {
 
 export async function GET(request: Request) {
   try {
+    const origin = request.headers.get("origin");
     const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     const moodRaw = searchParams.get("mood")?.trim().toLowerCase();
@@ -106,7 +108,8 @@ export async function GET(request: Request) {
     if (!moodRaw) {
       return jsonWithCors(
         { error: "mood query param is required" },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
@@ -115,21 +118,24 @@ export async function GET(request: Request) {
     if (!ALLOWED_MOODS.has(mood)) {
       return jsonWithCors(
         { error: "mood must be one of the allowed values" },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
     if (!Number.isFinite(sliderValue)) {
       return jsonWithCors(
         { error: "sliderValue query param must be a number (0-100)" },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
     if (sliderValue < 0 || sliderValue > 100) {
       return jsonWithCors(
         { error: "sliderValue must be between 0 and 100" },
-        { status: 400 }
+        { status: 400 },
+        origin
       );
     }
 
@@ -151,14 +157,16 @@ export async function GET(request: Request) {
     if (error) {
       return jsonWithCors(
         { error: `Supabase query failed: ${error.message}` },
-        { status: 500 }
+        { status: 500 },
+        origin
       );
     }
 
     if (!data || data.length === 0) {
       return jsonWithCors(
         { error: "No songs found for this mood." },
-        { status: 404 }
+        { status: 404 },
+        origin
       );
     }
 
@@ -206,10 +214,11 @@ export async function GET(request: Request) {
       release_date_precision: selected.release_date_precision ?? null
     };
 
-    return jsonWithCors(result);
+    return jsonWithCors(result, undefined, origin);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[get-song] Unhandled error:", message);
-    return jsonWithCors({ error: message }, { status: 500 });
+    const origin = request.headers.get("origin");
+    return jsonWithCors({ error: message }, { status: 500 }, origin);
   }
 }
