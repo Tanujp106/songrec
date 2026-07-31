@@ -1,0 +1,14 @@
+# Songrec
+
+> Songrec is a mood-based music recommendation web app. Choose a vibe and popularity level to get a track from a handpicked Spotify collection.
+
+## Public pages
+
+- [Songrec app](https://songrec.tanujpatel.design/): choose a mood and receive a music recommendation.
+- [About Songrec](https://songrec.tanujpatel.design/about/): a factual explanation of how the app works.
+
+## Facts
+
+- Songrec is a web application.
+- Recommendations are selected from a handpicked Spotify collection.
+- The app uses a mood selection and popularity slider to shape recommendations.
