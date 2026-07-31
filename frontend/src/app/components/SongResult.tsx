@@ -4,6 +4,7 @@ import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
 import { getCarouselIndex, getNextIndex } from "../lib/carousel";
+import { getAlbumSlideMotion } from "../lib/carousel-motion";
 import { getSongDetailMotion } from "../lib/detail-motion";
 import {
   Carousel,
@@ -249,20 +250,6 @@ export function SongResult({
     }
   }, [requestGyroPermission]);
 
-  // Auto-scroll marquee for artist text if it overflows
-  const artistTextRef = useRef<HTMLSpanElement>(null);
-  const artistContainerRef = useRef<HTMLDivElement>(null);
-  const [artistOverflow, setArtistOverflow] = useState(0);
-
-  useEffect(() => {
-    const text = artistTextRef.current;
-    const container = artistContainerRef.current;
-    if (text && container) {
-      const overflow = text.scrollWidth - container.clientWidth;
-      setArtistOverflow(overflow > 0 ? overflow : 0);
-    }
-  }, [artist]);
-
   return (
     <div
       className="relative w-full flex-1 min-h-0 touch-pan-y"
@@ -271,7 +258,7 @@ export function SongResult({
       {nextSong && songs.length > 1 && (
         <motion.div
           aria-hidden="true"
-          className="absolute top-[33%] right-[-58px] z-0 aspect-square w-[96px] overflow-hidden rounded-[20px] shadow-[0_8px_24px_rgba(19,15,41,0.32)] pointer-events-none"
+          className="absolute top-[33%] right-[-82px] z-0 aspect-square w-[96px] overflow-hidden rounded-[20px] shadow-[0_8px_24px_rgba(19,15,41,0.32)] pointer-events-none"
           initial={{ opacity: 0, x: 14 }}
           animate={{ opacity: 0.82, x: 0 }}
           transition={{ duration: 0.28, ease: "easeOut" }}
@@ -280,29 +267,39 @@ export function SongResult({
             key={nextSong.spotify_url ?? nextSong.song_name}
             alt=""
             className="size-full object-cover"
-            initial={{ opacity: 0, scale: 1.14, filter: "blur(14px) brightness(0.72) saturate(0.7)" }}
-            animate={{ opacity: 1, scale: 1.1, filter: "blur(12px) brightness(0.78) saturate(0.72)" }}
+            initial={{ opacity: 0, scale: 1.04 }}
+            animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: shouldReduceMotion ? 0.12 : 0.22, ease: "easeOut" }}
             src={nextSong.album_image ?? imgAlbum}
           />
           <div className="absolute inset-0 bg-black/10" />
         </motion.div>
       )}
+      {songs.length > 1 && (
+        <div
+          aria-hidden="true"
+          className="absolute top-[33%] right-0 z-[1] h-[96px] w-[52px] pointer-events-none"
+          style={{
+            background: "linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.14))",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            maskImage: "linear-gradient(to right, transparent, black 46%, black)",
+            WebkitMaskImage: "linear-gradient(to right, transparent, black 46%, black)",
+          }}
+        />
+      )}
 
       <div className="relative z-10 w-full flex flex-col items-center justify-between flex-1 h-full">
       {/* Top content */}
       <div className="flex flex-col items-center w-full mt-auto" style={{ gap: "clamp(16px, 3svh, 32px)" }}>
         {/* Description text */}
-        <motion.div
+        <div
           className="flex flex-col items-center w-full"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
         >
           <p className="font-['Spectral',serif] text-center text-white w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
             {`Here's a perfect ${mood} song for you`}
           </p>
-        </motion.div>
+        </div>
 
         {/* The continuous Embla track owns album-art movement; song details do not move with it. */}
         <Carousel
@@ -325,14 +322,7 @@ export function SongResult({
                       width: "min(100%, 76vw, 36vh)",
                       willChange: "transform, filter",
                     }}
-                    animate={{
-                      rotateX: isActive ? tilt.rotateX : 0,
-                      rotateY: isActive ? tilt.rotateY : 0,
-                      opacity: isActive ? 1 : 0.78,
-                      filter: isActive || shouldReduceMotion
-                        ? "blur(0px) brightness(1) saturate(1)"
-                        : "blur(12px) brightness(0.76) saturate(0.72)",
-                    }}
+                    animate={getAlbumSlideMotion(tilt, isActive)}
                     transition={{
                       type: "spring",
                       stiffness: 260,
@@ -369,14 +359,14 @@ export function SongResult({
 
         {/* Song details stay anchored while their content blur-crossfades. */}
         <div
-          className="w-full px-[24px]"
-          style={{ minHeight: "clamp(74px, 10svh, 96px)" }}
+          className="relative w-full px-[24px]"
+          style={{ height: "clamp(74px, 10svh, 96px)" }}
           aria-live="polite"
         >
-          <AnimatePresence mode="wait" initial={false}>
+          <AnimatePresence initial={false}>
             <motion.div
               key={activeSongKey}
-              className="flex flex-col items-center w-full"
+              className="absolute inset-x-0 top-0 flex flex-col items-center w-full"
               style={{ gap: "clamp(2px, 0.6svh, 4px)" }}
               initial={detailMotion.initial}
               animate={detailMotion.animate}
@@ -387,22 +377,7 @@ export function SongResult({
                 {title}
               </p>
               <div className="flex flex-col items-center text-white/80 tracking-[-0.48px] w-full" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
-            {/* Artist — single-line with auto-scrolling marquee if overflowing */}
-            <div
-              ref={artistContainerRef}
-              className="overflow-hidden whitespace-nowrap w-full relative"
-              style={{ maskImage: artistOverflow > 0 ? "linear-gradient(to right, transparent, black 8%, black 92%, transparent)" : undefined, WebkitMaskImage: artistOverflow > 0 ? "linear-gradient(to right, transparent, black 8%, black 92%, transparent)" : undefined }}
-            >
-              <motion.span
-                ref={artistTextRef}
-                className="inline-block text-center w-full"
-                style={{ width: artistOverflow > 0 ? "auto" : "100%" }}
-                animate={artistOverflow > 0 ? { x: [0, -artistOverflow, 0] } : { x: 0 }}
-                transition={artistOverflow > 0 ? { duration: Math.max(10, artistOverflow / 12), repeat: Infinity, ease: "easeInOut", repeatDelay: 2.5 } : undefined}
-              >
-                by {artist}
-              </motion.span>
-            </div>
+              <p className="overflow-hidden text-center w-full whitespace-nowrap text-ellipsis">by {artist}</p>
             {/* Album — single-line, truncated */}
             <p className="overflow-hidden text-center w-full whitespace-nowrap text-ellipsis">From {album}</p>
               </div>
@@ -412,19 +387,16 @@ export function SongResult({
       </div>
 
       {/* Bottom buttons */}
-      <motion.div
+      <div
         className="flex flex-col items-center w-full mt-auto"
         style={{ gap: "clamp(6px, 1.2svh, 8px)" }}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.55 }}
       >
         {/* Add to Spotify button */}
         <motion.a
           className="w-full flex gap-[8px] items-center justify-center rounded-[1000px] text-white cursor-pointer"
           style={{
             padding: "clamp(10px, 1.8svh, 16px) 0",
-            opacity: spotifyUrl ? 1 : 0.6,
+            opacity: spotifyUrl ? 1 : 0,
             pointerEvents: spotifyUrl ? "auto" : "none",
             WebkitTapHighlightColor: "transparent",
           }}
@@ -509,7 +481,7 @@ export function SongResult({
             Start over
           </span>
         </motion.button>
-      </motion.div>
+      </div>
       </div>
     </div>
   );
