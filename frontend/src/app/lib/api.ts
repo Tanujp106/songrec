@@ -169,10 +169,16 @@ export function isSongRecommendation(value: unknown): value is SongRecommendatio
   );
 }
 
-export async function fetchRecommendation(
+export function isSongRecommendationList(value: unknown): value is { songs: SongRecommendation[] } {
+  if (!value || typeof value !== "object") return false;
+  const songs = (value as Record<string, unknown>).songs;
+  return Array.isArray(songs) && songs.length > 0 && songs.every(isSongRecommendation);
+}
+
+export async function fetchRecommendations(
   mood: string,
   sliderValue: number
-): Promise<SongRecommendation> {
+): Promise<SongRecommendation[]> {
   const url = `${API_BASE}/api/get-song?mood=${encodeURIComponent(
     mood
   )}&sliderValue=${encodeURIComponent(String(sliderValue))}`;
@@ -184,7 +190,7 @@ export async function fetchRecommendation(
       cache: "no-store",
     });
   } catch {
-    return getFallback(mood);
+    return [getFallback(mood)];
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -195,10 +201,18 @@ export async function fetchRecommendation(
     data = await response.text().catch(() => null);
   }
   if (!response.ok) {
-    return getFallback(mood);
+    return [getFallback(mood)];
   }
 
-  return isSongRecommendation(data) ? data : getFallback(mood);
+  return isSongRecommendationList(data) ? data.songs : [getFallback(mood)];
+}
+
+export async function fetchRecommendation(
+  mood: string,
+  sliderValue: number
+): Promise<SongRecommendation> {
+  const songs = await fetchRecommendations(mood, sliderValue);
+  return songs[0];
 }
 
 export async function fetchMoodImages(

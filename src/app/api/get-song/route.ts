@@ -3,6 +3,7 @@ import { getSupabaseClient } from "@/lib/supabase";
 import { ALLOWED_MOODS, clamp, normalizeMood } from "@/lib/utils";
 import { corsHeaders } from "@/lib/cors";
 import { jsonInternalError } from "@/lib/http";
+import { selectUniqueRecommendations } from "@/lib/recommendations";
 import { createHash } from "crypto";
 
 export const runtime = "nodejs";
@@ -75,26 +76,6 @@ function cleanupSessions(now: number) {
       sessionStore.delete(entries[i][0]);
     }
   }
-}
-
-function getTrackKey(row: SongRow): string {
-  if (row.album_id) return `album:${row.album_id}`;
-  if (row.spotify_url) return `url:${row.spotify_url}`;
-  const artist = Array.isArray(row.artist) ? row.artist.join("|") : "";
-  return `track:${row.song_name}::${artist}`;
-}
-
-function pickWeighted<T>(items: T[], weights: number[]): T {
-  const total = weights.reduce((sum, w) => sum + w, 0);
-  if (total <= 0) {
-    return items[Math.floor(Math.random() * items.length)];
-  }
-  let threshold = Math.random() * total;
-  for (let i = 0; i < items.length; i += 1) {
-    threshold -= weights[i];
-    if (threshold <= 0) return items[i];
-  }
-  return items[items.length - 1];
 }
 
 export async function GET(request: Request) {
@@ -180,8 +161,8 @@ export async function GET(request: Request) {
       const distance = Math.abs(p - target);
       const base = Math.exp(-Math.pow(distance / sigma, 2));
 
-      const trackKey = getTrackKey(row);
       const artistList = Array.isArray(row.artist) ? row.artist : [];
+      const trackKey = row.spotify_url ?? `${row.song_name}::${artistList.join("|")}`;
       const recentTrackPenalty = session.tracks.includes(trackKey) ? 0.15 : 1;
       const recentArtistPenalty = artistList.some((a) => session.artists.includes(a.toLowerCase()))
         ? 0.45
@@ -190,29 +171,29 @@ export async function GET(request: Request) {
       return base * recentTrackPenalty * recentArtistPenalty + 0.02;
     });
 
-    const selected = pickWeighted(rows, weights);
-    const selectedKey = getTrackKey(selected);
-    const selectedArtists = Array.isArray(selected.artist) ? selected.artist.map((a) => a.toLowerCase()) : [];
-    session.tracks = [...session.tracks, selectedKey].slice(-MAX_RECENT_TRACKS);
+    const selected = selectUniqueRecommendations(rows, weights);
+    const selectedKeys = selected.map((row) => row.spotify_url ?? `${row.song_name}::${row.artist.join("|")}`);
+    const selectedArtists = selected.flatMap((row) => row.artist.map((artist) => artist.toLowerCase()));
+    session.tracks = [...session.tracks, ...selectedKeys].slice(-MAX_RECENT_TRACKS);
     session.artists = [...session.artists, ...selectedArtists].slice(-MAX_RECENT_ARTISTS);
     session.updatedAt = now;
     sessionStore.set(sessionKey, session);
 
-    const result: SongRow = {
-      song_name: selected.song_name,
-      artist: selected.artist ?? [],
-      album_image: selected.album_image ?? null,
-      spotify_url: selected.spotify_url ?? null,
-      popularity: selected.popularity,
-      release_year: selected.release_year ?? null,
-      duration_ms: selected.duration_ms ?? null,
-      album_name: selected.album_name ?? null,
-      album_id: selected.album_id ?? null,
-      release_date: selected.release_date ?? null,
-      release_date_precision: selected.release_date_precision ?? null
-    };
+    const songs = selected.map((row) => ({
+      song_name: row.song_name,
+      artist: row.artist ?? [],
+      album_image: row.album_image ?? null,
+      spotify_url: row.spotify_url ?? null,
+      popularity: row.popularity,
+      release_year: row.release_year ?? null,
+      duration_ms: row.duration_ms ?? null,
+      album_name: row.album_name ?? null,
+      album_id: row.album_id ?? null,
+      release_date: row.release_date ?? null,
+      release_date_precision: row.release_date_precision ?? null
+    }));
 
-    return jsonWithCors(result, undefined, origin);
+    return jsonWithCors({ songs }, undefined, origin);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[get-song] Unhandled error:", message);

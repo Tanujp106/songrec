@@ -6,7 +6,7 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { SongResult } from "./components/SongResult";
 import {
   fetchAllMoodImages,
-  fetchRecommendation,
+  fetchRecommendations,
   preloadImageFiles,
   type SongRecommendation,
 } from "./lib/api";
@@ -58,7 +58,7 @@ export default function App() {
   const [confirmedMood, setConfirmedMood] = useState<string | null>(null);
   const [popularity, setPopularity] = useState(0); // 0–3
   const [screen, setScreen] = useState<Screen>("mood");
-  const [song, setSong] = useState<SongRecommendation | null>(null);
+  const [songs, setSongs] = useState<SongRecommendation[]>([]);
   const [albumImagesMood, setAlbumImagesMood] = useState<string | null>(null);
   const [dialNudge, setDialNudge] = useState(false);
   const [btnShake, setBtnShake] = useState(false);
@@ -182,7 +182,7 @@ export default function App() {
     try {
       const mood = confirmedMood;
       const sliderValue = Math.round((popularity / 3) * 100);
-      setSong(null);
+      setSongs([]);
       setScreen("loading");
 
       // 60s in dev for tuning, 2.5s in prod
@@ -201,10 +201,10 @@ export default function App() {
         }
       }
 
-      const result = await fetchRecommendation(mood, sliderValue);
+      const result = await fetchRecommendations(mood, sliderValue);
       await minDelay;
       if (recommendRequestGuard.current.isCurrent(requestId)) {
-        setSong(result);
+        setSongs(result);
         setScreen("result");
       }
     } finally {
@@ -219,7 +219,7 @@ export default function App() {
     recommendRequestGuard.current.cancel();
     setIsRecommending(false);
     setScreen("mood");
-    setSong(null);
+    setSongs([]);
     // Don't clear albumImages — they're cached in imageCache ref
     // and will be re-applied when user picks a mood
   };
@@ -368,7 +368,7 @@ export default function App() {
                     popularity={String(popularity)}
                     images={albumImages}
                     imagesMood={albumImagesMood}
-                    highlightImageUrl={song?.album_image ?? null}
+                    highlightImageUrl={songs[0]?.album_image ?? null}
                     morph={morphDial}
                   />
                 </motion.div>
@@ -389,7 +389,7 @@ export default function App() {
                       popularity={popularity}
                       accentColor={accentColor}
                       onStartOver={handleStartOver}
-                      song={song}
+                      songs={songs}
                       morph={morphDial}
                     />
                   </div>

@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
+import { getNextIndex, getPreviousIndex, getSwipeDirection } from "../lib/carousel";
 
 const POPULARITY_LABELS = ["underrated", "moderate", "well-known", "popular"];
 
@@ -165,7 +166,7 @@ interface SongResultProps {
   popularity: number;
   accentColor: string;
   onStartOver: () => void;
-  song: SongRecommendation | null;
+  songs: SongRecommendation[];
   morph: {
     startRadius: number;
     endRadius: number;
@@ -183,15 +184,34 @@ export function SongResult({
   popularity,
   accentColor,
   onStartOver,
-  song,
+  songs,
   morph,
 }: SongResultProps) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [swipeDirection, setSwipeDirection] = useState<"next" | "previous">("next");
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const song = songs[activeIndex] ?? null;
+  const nextSong = songs[getNextIndex(activeIndex, songs.length)] ?? null;
   const popLabel = POPULARITY_LABELS[popularity] || "popular";
   const title = song?.song_name ?? "No song found";
   const artist = song?.artist?.length ? song.artist.join(", ") : "Unknown Artist";
   const album = song?.album_name ?? "Unknown album";
   const albumImage = song?.album_image ?? imgAlbum;
   const spotifyUrl = song?.spotify_url ?? null;
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [songs]);
+
+  const navigate = useCallback((direction: "next" | "previous") => {
+    if (songs.length < 2) return;
+    setSwipeDirection(direction);
+    setActiveIndex((index) => direction === "next"
+      ? getNextIndex(index, songs.length)
+      : getPreviousIndex(index, songs.length));
+  }, [songs.length]);
+
+  const activeSongKey = song?.spotify_url ?? `${song?.song_name ?? "empty"}-${activeIndex}`;
 
   // Gyroscope parallax on album art
   const albumContainerRef = useRef<HTMLDivElement>(null);
@@ -224,7 +244,58 @@ export function SongResult({
   }, [artist]);
 
   return (
-    <div className="w-full flex flex-col items-center justify-between flex-1">
+    <div
+      className="relative w-full flex-1 min-h-0 touch-pan-y"
+      tabIndex={0}
+      aria-label="Song recommendations. Swipe left for the next song and right for the previous song."
+      onPointerDown={(event) => {
+        pointerStartRef.current = { x: event.clientX, y: event.clientY };
+      }}
+      onPointerUp={(event) => {
+        const start = pointerStartRef.current;
+        pointerStartRef.current = null;
+        if (!start) return;
+        const direction = getSwipeDirection({
+          startX: start.x,
+          endX: event.clientX,
+          startY: start.y,
+          endY: event.clientY
+        });
+        if (direction) navigate(direction);
+      }}
+      onPointerCancel={() => {
+        pointerStartRef.current = null;
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") navigate("previous");
+        if (event.key === "ArrowRight") navigate("next");
+      }}
+    >
+      {nextSong && songs.length > 1 && (
+        <motion.div
+          aria-hidden="true"
+          className="absolute top-[33%] right-[-58px] z-0 aspect-square w-[96px] overflow-hidden rounded-[20px] shadow-[0_8px_24px_rgba(19,15,41,0.32)] pointer-events-none"
+          initial={{ opacity: 0, x: 14 }}
+          animate={{ opacity: 0.82, x: 0 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+        >
+          <img
+            alt=""
+            className="size-full object-cover"
+            src={nextSong.album_image ?? imgAlbum}
+          />
+        </motion.div>
+      )}
+
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={activeSongKey}
+          className="relative z-10 w-full flex flex-col items-center justify-between flex-1 h-full"
+          initial={{ opacity: 0, x: swipeDirection === "next" ? 28 : -28 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: swipeDirection === "next" ? -28 : 28 }}
+          transition={{ duration: 0.24, ease: "easeOut" }}
+        >
       {/* Top content */}
       <div className="flex flex-col items-center w-full mt-auto" style={{ gap: "clamp(16px, 3svh, 32px)" }}>
         {/* Description text */}
@@ -421,6 +492,8 @@ export function SongResult({
           </span>
         </motion.button>
       </motion.div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
