@@ -1,9 +1,10 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
 import { getNextIndex, getPreviousIndex, getSwipeDirection } from "../lib/carousel";
+import { getSongDetailMotion } from "../lib/detail-motion";
 
 const POPULARITY_LABELS = ["underrated", "moderate", "well-known", "popular"];
 
@@ -198,6 +199,8 @@ export function SongResult({
   const album = song?.album_name ?? "Unknown album";
   const albumImage = song?.album_image ?? imgAlbum;
   const spotifyUrl = song?.spotify_url ?? null;
+  const shouldReduceMotion = useReducedMotion() ?? false;
+  const detailMotion = getSongDetailMotion(shouldReduceMotion);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -279,23 +282,20 @@ export function SongResult({
           animate={{ opacity: 0.82, x: 0 }}
           transition={{ duration: 0.28, ease: "easeOut" }}
         >
-          <img
+          <motion.img
+            key={nextSong.spotify_url ?? nextSong.song_name}
             alt=""
             className="size-full object-cover"
+            initial={{ opacity: 0, scale: 1.14, filter: "blur(14px) brightness(0.72) saturate(0.7)" }}
+            animate={{ opacity: 1, scale: 1.1, filter: "blur(12px) brightness(0.78) saturate(0.72)" }}
+            transition={{ duration: shouldReduceMotion ? 0.12 : 0.22, ease: "easeOut" }}
             src={nextSong.album_image ?? imgAlbum}
           />
+          <div className="absolute inset-0 bg-black/10" />
         </motion.div>
       )}
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={activeSongKey}
-          className="relative z-10 w-full flex flex-col items-center justify-between flex-1 h-full"
-          initial={{ opacity: 0, x: swipeDirection === "next" ? 28 : -28 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: swipeDirection === "next" ? -28 : 28 }}
-          transition={{ duration: 0.24, ease: "easeOut" }}
-        >
+      <div className="relative z-10 w-full flex flex-col items-center justify-between flex-1 h-full">
       {/* Top content */}
       <div className="flex flex-col items-center w-full mt-auto" style={{ gap: "clamp(16px, 3svh, 32px)" }}>
         {/* Description text */}
@@ -312,25 +312,33 @@ export function SongResult({
 
         {/* Album art — morph target for layoutId transition */}
         <div className="w-full">
-          <motion.div
-            ref={albumContainerRef}
-            className="relative aspect-square mx-auto"
-            style={{
-              width: "min(100%, 76vw, 36vh)",
-              willChange: "transform",
-            }}
-            animate={{
-              rotateX: tilt.rotateX,
-              rotateY: tilt.rotateY,
-            }}
-            transition={{
-              type: "spring",
-              stiffness: 260,
-              damping: 30,
-              mass: 0.6,
-            }}
-            onTouchStart={requestGyroPermission}
-          >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeSongKey}
+              initial={{ opacity: 0, x: swipeDirection === "next" ? 28 : -28 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: swipeDirection === "next" ? -28 : 28 }}
+              transition={{ duration: shouldReduceMotion ? 0.12 : 0.24, ease: "easeOut" }}
+            >
+              <motion.div
+                ref={albumContainerRef}
+                className="relative aspect-square mx-auto"
+                style={{
+                  width: "min(100%, 76vw, 36vh)",
+                  willChange: "transform",
+                }}
+                animate={{
+                  rotateX: tilt.rotateX,
+                  rotateY: tilt.rotateY,
+                }}
+                transition={{
+                  type: "spring",
+                  stiffness: 260,
+                  damping: 30,
+                  mass: 0.6,
+                }}
+                onTouchStart={requestGyroPermission}
+              >
             {/* Shadow — fades in only after the morph animation settles */}
             <motion.div
               className="absolute inset-0 pointer-events-none"
@@ -356,21 +364,31 @@ export function SongResult({
                 src={albumImage}
               />
             </motion.div>
-          </motion.div>
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
         </div>
 
-        {/* Song info */}
-        <motion.div
-          className="flex flex-col items-center w-full px-[24px]"
-          style={{ gap: "clamp(2px, 0.6svh, 4px)" }}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
+        {/* Song details stay anchored while their content blur-crossfades. */}
+        <div
+          className="w-full px-[24px]"
+          style={{ minHeight: "clamp(74px, 10svh, 96px)" }}
+          aria-live="polite"
         >
-          <p className="font-['Spectral',serif] text-white tracking-[-0.96px] text-center overflow-hidden text-ellipsis whitespace-nowrap w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
-            {title}
-          </p>
-          <div className="flex flex-col items-center text-white/80 tracking-[-0.48px] w-full" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeSongKey}
+              className="flex flex-col items-center w-full"
+              style={{ gap: "clamp(2px, 0.6svh, 4px)" }}
+              initial={detailMotion.initial}
+              animate={detailMotion.animate}
+              exit={detailMotion.exit}
+              transition={detailMotion.transition}
+            >
+              <p className="font-['Spectral',serif] text-white tracking-[-0.96px] text-center overflow-hidden text-ellipsis whitespace-nowrap w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
+                {title}
+              </p>
+              <div className="flex flex-col items-center text-white/80 tracking-[-0.48px] w-full" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
             {/* Artist — single-line with auto-scrolling marquee if overflowing */}
             <div
               ref={artistContainerRef}
@@ -389,8 +407,10 @@ export function SongResult({
             </div>
             {/* Album — single-line, truncated */}
             <p className="overflow-hidden text-center w-full whitespace-nowrap text-ellipsis">From {album}</p>
-          </div>
-        </motion.div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Bottom buttons */}
@@ -492,8 +512,7 @@ export function SongResult({
           </span>
         </motion.button>
       </motion.div>
-        </motion.div>
-      </AnimatePresence>
+      </div>
     </div>
   );
 }
