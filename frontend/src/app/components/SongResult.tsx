@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
-import { getCarouselIndex, getNextIndex } from "../lib/carousel";
+import { getCarouselIndex, getFinalCarouselOptions } from "../lib/carousel";
 import { getAlbumSlideMotion } from "../lib/carousel-motion";
 import { getSongDetailMotion } from "../lib/detail-motion";
 import {
@@ -144,26 +144,14 @@ function use3DTilt(
     };
 
     const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) handleMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
     const handleReset = () => setTilt({ rotateX: 0, rotateY: 0 });
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length > 0) handleMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
 
     el.addEventListener("mousemove", handleMouseMove);
     el.addEventListener("mouseleave", handleReset);
-    el.addEventListener("touchstart", handleTouchStart);
-    el.addEventListener("touchmove", handleTouchMove);
-    el.addEventListener("touchend", handleReset);
 
     return () => {
       el.removeEventListener("mousemove", handleMouseMove);
       el.removeEventListener("mouseleave", handleReset);
-      el.removeEventListener("touchstart", handleTouchStart);
-      el.removeEventListener("touchmove", handleTouchMove);
-      el.removeEventListener("touchend", handleReset);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
   }, [activeKey, containerRef, maxRotation]);
@@ -200,7 +188,6 @@ export function SongResult({
   const [activeIndex, setActiveIndex] = useState(0);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const song = songs[activeIndex] ?? null;
-  const nextSong = songs[getNextIndex(activeIndex, songs.length)] ?? null;
   const popLabel = POPULARITY_LABELS[popularity] || "popular";
   const title = song?.song_name ?? "No song found";
   const artist = song?.artist?.length ? song.artist.join(", ") : "Unknown Artist";
@@ -223,11 +210,11 @@ export function SongResult({
     };
 
     syncActiveSong();
-    carouselApi.on("select", syncActiveSong);
+    carouselApi.on("settle", syncActiveSong);
     carouselApi.on("reInit", syncActiveSong);
 
     return () => {
-      carouselApi.off("select", syncActiveSong);
+      carouselApi.off("settle", syncActiveSong);
       carouselApi.off("reInit", syncActiveSong);
     };
   }, [carouselApi, songs.length]);
@@ -255,30 +242,10 @@ export function SongResult({
       className="relative w-full flex-1 min-h-0 touch-pan-y"
       aria-label="Song recommendations. Swipe left for the next song and right for the previous song."
     >
-      {nextSong && songs.length > 1 && (
-        <motion.div
-          aria-hidden="true"
-          className="absolute top-[33%] right-[-82px] z-0 aspect-square w-[96px] overflow-hidden rounded-[20px] shadow-[0_8px_24px_rgba(19,15,41,0.32)] pointer-events-none"
-          initial={{ opacity: 0, x: 14 }}
-          animate={{ opacity: 0.82, x: 0 }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-        >
-          <motion.img
-            key={nextSong.spotify_url ?? nextSong.song_name}
-            alt=""
-            className="size-full object-cover"
-            initial={{ opacity: 0, scale: 1.04 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: shouldReduceMotion ? 0.12 : 0.22, ease: "easeOut" }}
-            src={nextSong.album_image ?? imgAlbum}
-          />
-          <div className="absolute inset-0 bg-black/10" />
-        </motion.div>
-      )}
       {songs.length > 1 && (
         <div
           aria-hidden="true"
-          className="absolute top-[33%] right-0 z-[1] h-[96px] w-[52px] pointer-events-none"
+          className="absolute top-[33%] right-0 z-[1] h-[min(76vw,36vh)] w-[52px] pointer-events-none"
           style={{
             background: "linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.14))",
             backdropFilter: "blur(14px)",
@@ -304,20 +271,24 @@ export function SongResult({
         {/* The continuous Embla track owns album-art movement; song details do not move with it. */}
         <Carousel
           className="w-full overflow-visible"
-          opts={{ align: "start", loop: songs.length > 1 }}
+          opts={getFinalCarouselOptions(songs.length)}
           setApi={setCarouselApi}
           tabIndex={0}
         >
-          <CarouselContent className="ml-0">
+          <CarouselContent className="ml-0" viewportClassName="touch-pan-y">
             {songs.map((candidate, index) => {
               const isActive = index === activeIndex;
               const candidateKey = candidate.spotify_url ?? `${candidate.song_name}-${index}`;
 
               return (
-                <CarouselItem key={candidateKey} className="basis-full pl-0">
+                <CarouselItem
+                  key={candidateKey}
+                  className="basis-full pl-0 justify-start"
+                  style={{ flexBasis: "calc(100% - 72px)" }}
+                >
                   <motion.div
                     ref={isActive ? albumContainerRef : undefined}
-                    className="relative aspect-square mx-auto"
+                    className="relative aspect-square ml-[12%]"
                     style={{
                       width: "min(100%, 76vw, 36vh)",
                       willChange: "transform, filter",

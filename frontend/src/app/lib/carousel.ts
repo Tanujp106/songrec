@@ -1,5 +1,15 @@
 const SWIPE_THRESHOLD_PX = 56;
 
+export function getFinalCarouselOptions(songCount: number) {
+  return {
+    align: "start" as const,
+    containScroll: false as const,
+    dragFree: false,
+    loop: songCount > 1,
+    skipSnaps: false,
+  };
+}
+
 function normalizeIndex(index: number, length: number): number {
   if (length <= 0) return 0;
   return ((index % length) + length) % length;

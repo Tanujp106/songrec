@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getCarouselIndex, getNextIndex, getPreviousIndex, getSwipeDirection } from "../frontend/src/app/lib/carousel";
+import {
+  getCarouselIndex,
+  getFinalCarouselOptions,
+  getNextIndex,
+  getPreviousIndex,
+  getSwipeDirection,
+} from "../frontend/src/app/lib/carousel";
+
+test("uses a snapped looping track for multiple final-screen songs", () => {
+  assert.deepEqual(getFinalCarouselOptions(5), {
+    align: "start",
+    containScroll: false,
+    dragFree: false,
+    loop: true,
+    skipSnaps: false,
+  });
+});
+
+test("disables looping when the final screen has one song", () => {
+  assert.equal(getFinalCarouselOptions(1).loop, false);
+});
 
 test("wraps the next index from the final song to the first song", () => {
   assert.equal(getNextIndex(4, 5), 0);
