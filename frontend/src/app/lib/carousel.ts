@@ -1,5 +1,13 @@
 const SWIPE_THRESHOLD_PX = 56;
 
+export function getResultScreenLayout() {
+  return {
+    actionInsetPx: 24,
+    carouselInsetPx: 0,
+    resultMaxWidth: "none",
+  };
+}
+
 export function getFinalCarouselLayout() {
   return {
     albumWidth: "100%",

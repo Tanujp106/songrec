@@ -4,11 +4,20 @@ import test from "node:test";
 import {
   getCarouselIndex,
   getFinalCarouselLayout,
+  getResultScreenLayout,
   getFinalCarouselOptions,
   getNextIndex,
   getPreviousIndex,
   getSwipeDirection,
 } from "../frontend/src/app/lib/carousel";
+
+test("keeps the result carousel edge-to-edge while controls retain their inset", () => {
+  assert.deepEqual(getResultScreenLayout(), {
+    actionInsetPx: 24,
+    carouselInsetPx: 0,
+    resultMaxWidth: "none",
+  });
+});
 
 test("lays out full-width cards with a 40px gap", () => {
   assert.deepEqual(getFinalCarouselLayout(), {

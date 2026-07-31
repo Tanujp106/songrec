@@ -3,7 +3,12 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
-import { getCarouselIndex, getFinalCarouselLayout, getFinalCarouselOptions } from "../lib/carousel";
+import {
+  getCarouselIndex,
+  getFinalCarouselLayout,
+  getFinalCarouselOptions,
+  getResultScreenLayout,
+} from "../lib/carousel";
 import { getAlbumSlideMotion } from "../lib/carousel-motion";
 import { getSongDetailMotion } from "../lib/detail-motion";
 import {
@@ -197,6 +202,7 @@ export function SongResult({
   const shouldReduceMotion = useReducedMotion() ?? false;
   const detailMotion = getSongDetailMotion(shouldReduceMotion);
   const carouselLayout = getFinalCarouselLayout();
+  const resultScreenLayout = getResultScreenLayout();
 
   useEffect(() => {
     setActiveIndex(0);
@@ -365,7 +371,7 @@ export function SongResult({
       {/* Bottom buttons */}
       <div
         className="flex flex-col items-center w-full mt-auto"
-        style={{ gap: "clamp(6px, 1.2svh, 8px)" }}
+        style={{ gap: "clamp(6px, 1.2svh, 8px)", paddingInline: `${resultScreenLayout.actionInsetPx}px` }}
       >
         {/* Add to Spotify button */}
         <motion.a

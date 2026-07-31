@@ -4,6 +4,7 @@ import { MoodPicker, MOOD_COLORS, entranceProps } from "./components/MoodDial";
 import { PopularitySlider } from "./components/PopularitySlider";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { SongResult } from "./components/SongResult";
+import { getResultScreenLayout } from "./lib/carousel";
 import {
   fetchAllMoodImages,
   fetchRecommendations,
@@ -59,6 +60,7 @@ export default function App() {
   const [popularity, setPopularity] = useState(0); // 0–3
   const [screen, setScreen] = useState<Screen>("mood");
   const [songs, setSongs] = useState<SongRecommendation[]>([]);
+  const resultScreenLayout = getResultScreenLayout();
   const [albumImagesMood, setAlbumImagesMood] = useState<string | null>(null);
   const [dialNudge, setDialNudge] = useState(false);
   const [btnShake, setBtnShake] = useState(false);
@@ -254,14 +256,14 @@ export default function App() {
 
       {/* Main Container */}
       <main
-        className="relative z-10 w-full flex flex-col items-center justify-between px-[24px] pt-[calc(16px+env(safe-area-inset-top))] pb-[calc(16px+env(safe-area-inset-bottom))] overflow-hidden"
+        className="relative z-10 w-full flex flex-col items-center justify-between pt-[calc(16px+env(safe-area-inset-top))] pb-[calc(16px+env(safe-area-inset-bottom))] overflow-hidden"
         style={{ minHeight: "100svh", height: "100dvh", gap: "clamp(8px, 1.5svh, 24px)" }}
       >
 
         {/* Header — always visible */}
         <motion.header
           className="w-full flex justify-between items-center text-white font-['Spectral',serif] tracking-wide shrink-0"
-          style={{ fontSize: "clamp(15px, 2.4svh, 18px)" }}
+          style={{ fontSize: "clamp(15px, 2.4svh, 18px)", paddingInline: `${resultScreenLayout.actionInsetPx}px` }}
           {...entranceProps(0)}
         >
           <span>songrec</span>
@@ -285,7 +287,7 @@ export default function App() {
               {screen === "mood" && (
                 <motion.div
                   key="mood-screen"
-                  className="absolute inset-0 flex flex-col items-center justify-between w-full"
+                  className="absolute inset-0 flex flex-col items-center justify-between w-full px-[24px]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -357,7 +359,7 @@ export default function App() {
               {screen === "loading" && (
                 <motion.div
                   key="loading-screen"
-                  className="absolute inset-0 flex flex-col items-center w-full"
+                  className="absolute inset-0 flex flex-col items-center w-full px-[24px]"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0, transition: { duration: 0.3, ease: "easeOut" } }}
@@ -383,16 +385,14 @@ export default function App() {
                   exit={{ opacity: 0 }}
                   transition={{ duration: appDial.screenFadeDuration, ease: "easeOut" }}
                 >
-                  <div className="w-full max-w-[400px] mx-auto flex flex-col items-center flex-1">
-                    <SongResult
-                      mood={confirmedMood || "indie"}
-                      popularity={popularity}
-                      accentColor={accentColor}
-                      onStartOver={handleStartOver}
-                      songs={songs}
-                      morph={morphDial}
-                    />
-                  </div>
+                  <SongResult
+                    mood={confirmedMood || "indie"}
+                    popularity={popularity}
+                    accentColor={accentColor}
+                    onStartOver={handleStartOver}
+                    songs={songs}
+                    morph={morphDial}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
