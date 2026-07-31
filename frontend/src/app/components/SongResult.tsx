@@ -3,8 +3,15 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
-import { getNextIndex, getPreviousIndex, getSwipeDirection } from "../lib/carousel";
+import { getCarouselIndex, getFinalCarouselLayout, getFinalCarouselOptions } from "../lib/carousel";
+import { getAlbumSlideMotion } from "../lib/carousel-motion";
 import { getSongDetailMotion } from "../lib/detail-motion";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  type CarouselApi,
+} from "./ui/carousel";
 
 const POPULARITY_LABELS = ["underrated", "moderate", "well-known", "popular"];
 
@@ -13,6 +20,7 @@ function useGyroParallax(
   containerRef: React.RefObject<HTMLDivElement | null>,
   maxOffset = 6,
   maxRotation = 3,
+  activeKey?: string,
 ) {
   const [permissionGranted, setPermissionGranted] = useState(false);
 
@@ -96,7 +104,7 @@ function useGyroParallax(
       window.clearTimeout(startTimer);
       el.style.transform = "";
     };
-  }, [containerRef, maxOffset, maxRotation, permissionGranted]);
+  }, [activeKey, containerRef, maxOffset, maxRotation, permissionGranted]);
 
   return { requestPermission };
 }
@@ -105,6 +113,7 @@ function useGyroParallax(
 function use3DTilt(
   containerRef: React.RefObject<HTMLDivElement | null>,
   maxRotation = 4,
+  activeKey?: string,
 ) {
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
   const animationFrameRef = useRef<number | null>(null);
@@ -135,29 +144,17 @@ function use3DTilt(
     };
 
     const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) handleMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
     const handleReset = () => setTilt({ rotateX: 0, rotateY: 0 });
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length > 0) handleMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
 
     el.addEventListener("mousemove", handleMouseMove);
     el.addEventListener("mouseleave", handleReset);
-    el.addEventListener("touchstart", handleTouchStart);
-    el.addEventListener("touchmove", handleTouchMove);
-    el.addEventListener("touchend", handleReset);
 
     return () => {
       el.removeEventListener("mousemove", handleMouseMove);
       el.removeEventListener("mouseleave", handleReset);
-      el.removeEventListener("touchstart", handleTouchStart);
-      el.removeEventListener("touchmove", handleTouchMove);
-      el.removeEventListener("touchend", handleReset);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [containerRef, maxRotation]);
+  }, [activeKey, containerRef, maxRotation]);
 
   return { tilt };
 }
@@ -189,10 +186,8 @@ export function SongResult({
   morph,
 }: SongResultProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [swipeDirection, setSwipeDirection] = useState<"next" | "previous">("next");
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const song = songs[activeIndex] ?? null;
-  const nextSong = songs[getNextIndex(activeIndex, songs.length)] ?? null;
   const popLabel = POPULARITY_LABELS[popularity] || "popular";
   const title = song?.song_name ?? "No song found";
   const artist = song?.artist?.length ? song.artist.join(", ") : "Unknown Artist";
@@ -201,25 +196,36 @@ export function SongResult({
   const spotifyUrl = song?.spotify_url ?? null;
   const shouldReduceMotion = useReducedMotion() ?? false;
   const detailMotion = getSongDetailMotion(shouldReduceMotion);
+  const carouselLayout = getFinalCarouselLayout();
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [songs]);
+    carouselApi?.scrollTo(0, true);
+  }, [carouselApi, songs]);
 
-  const navigate = useCallback((direction: "next" | "previous") => {
-    if (songs.length < 2) return;
-    setSwipeDirection(direction);
-    setActiveIndex((index) => direction === "next"
-      ? getNextIndex(index, songs.length)
-      : getPreviousIndex(index, songs.length));
-  }, [songs.length]);
+  useEffect(() => {
+    if (!carouselApi) return;
+
+    const syncActiveSong = () => {
+      setActiveIndex(getCarouselIndex(carouselApi.selectedScrollSnap(), songs.length));
+    };
+
+    syncActiveSong();
+    carouselApi.on("settle", syncActiveSong);
+    carouselApi.on("reInit", syncActiveSong);
+
+    return () => {
+      carouselApi.off("settle", syncActiveSong);
+      carouselApi.off("reInit", syncActiveSong);
+    };
+  }, [carouselApi, songs.length]);
 
   const activeSongKey = song?.spotify_url ?? `${song?.song_name ?? "empty"}-${activeIndex}`;
 
   // Gyroscope parallax on album art
   const albumContainerRef = useRef<HTMLDivElement>(null);
-  const { requestPermission: requestGyroPermission } = useGyroParallax(albumContainerRef);
-  const { tilt } = use3DTilt(albumContainerRef);
+  const { requestPermission: requestGyroPermission } = useGyroParallax(albumContainerRef, 6, 3, activeSongKey);
+  const { tilt } = use3DTilt(albumContainerRef, 4, activeSongKey);
 
   // Auto-request permission on mount for non-iOS (Android doesn't need user gesture)
   useEffect(() => {
@@ -232,153 +238,111 @@ export function SongResult({
     }
   }, [requestGyroPermission]);
 
-  // Auto-scroll marquee for artist text if it overflows
-  const artistTextRef = useRef<HTMLSpanElement>(null);
-  const artistContainerRef = useRef<HTMLDivElement>(null);
-  const [artistOverflow, setArtistOverflow] = useState(0);
-
-  useEffect(() => {
-    const text = artistTextRef.current;
-    const container = artistContainerRef.current;
-    if (text && container) {
-      const overflow = text.scrollWidth - container.clientWidth;
-      setArtistOverflow(overflow > 0 ? overflow : 0);
-    }
-  }, [artist]);
-
   return (
     <div
       className="relative w-full flex-1 min-h-0 touch-pan-y"
-      tabIndex={0}
       aria-label="Song recommendations. Swipe left for the next song and right for the previous song."
-      onPointerDown={(event) => {
-        pointerStartRef.current = { x: event.clientX, y: event.clientY };
-      }}
-      onPointerUp={(event) => {
-        const start = pointerStartRef.current;
-        pointerStartRef.current = null;
-        if (!start) return;
-        const direction = getSwipeDirection({
-          startX: start.x,
-          endX: event.clientX,
-          startY: start.y,
-          endY: event.clientY
-        });
-        if (direction) navigate(direction);
-      }}
-      onPointerCancel={() => {
-        pointerStartRef.current = null;
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") navigate("previous");
-        if (event.key === "ArrowRight") navigate("next");
-      }}
     >
-      {nextSong && songs.length > 1 && (
-        <motion.div
+      {songs.length > 1 && (
+        <div
           aria-hidden="true"
-          className="absolute top-[33%] right-[-58px] z-0 aspect-square w-[96px] overflow-hidden rounded-[20px] shadow-[0_8px_24px_rgba(19,15,41,0.32)] pointer-events-none"
-          initial={{ opacity: 0, x: 14 }}
-          animate={{ opacity: 0.82, x: 0 }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-        >
-          <motion.img
-            key={nextSong.spotify_url ?? nextSong.song_name}
-            alt=""
-            className="size-full object-cover"
-            initial={{ opacity: 0, scale: 1.14, filter: "blur(14px) brightness(0.72) saturate(0.7)" }}
-            animate={{ opacity: 1, scale: 1.1, filter: "blur(12px) brightness(0.78) saturate(0.72)" }}
-            transition={{ duration: shouldReduceMotion ? 0.12 : 0.22, ease: "easeOut" }}
-            src={nextSong.album_image ?? imgAlbum}
-          />
-          <div className="absolute inset-0 bg-black/10" />
-        </motion.div>
+          className="absolute top-[33%] right-0 z-[1] h-[min(76vw,36vh)] w-[52px] pointer-events-none"
+          style={{
+            background: "linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.14))",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            maskImage: "linear-gradient(to right, transparent, black 46%, black)",
+            WebkitMaskImage: "linear-gradient(to right, transparent, black 46%, black)",
+          }}
+        />
       )}
 
       <div className="relative z-10 w-full flex flex-col items-center justify-between flex-1 h-full">
       {/* Top content */}
       <div className="flex flex-col items-center w-full mt-auto" style={{ gap: "clamp(16px, 3svh, 32px)" }}>
         {/* Description text */}
-        <motion.div
+        <div
           className="flex flex-col items-center w-full"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.15 }}
         >
           <p className="font-['Spectral',serif] text-center text-white w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
             {`Here's a perfect ${mood} song for you`}
           </p>
-        </motion.div>
-
-        {/* Album art — morph target for layoutId transition */}
-        <div className="w-full">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={activeSongKey}
-              initial={{ opacity: 0, x: swipeDirection === "next" ? 28 : -28 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: swipeDirection === "next" ? -28 : 28 }}
-              transition={{ duration: shouldReduceMotion ? 0.12 : 0.24, ease: "easeOut" }}
-            >
-              <motion.div
-                ref={albumContainerRef}
-                className="relative aspect-square mx-auto"
-                style={{
-                  width: "min(100%, 76vw, 36vh)",
-                  willChange: "transform",
-                }}
-                animate={{
-                  rotateX: tilt.rotateX,
-                  rotateY: tilt.rotateY,
-                }}
-                transition={{
-                  type: "spring",
-                  stiffness: 260,
-                  damping: 30,
-                  mass: 0.6,
-                }}
-                onTouchStart={requestGyroPermission}
-              >
-            {/* Shadow — fades in only after the morph animation settles */}
-            <motion.div
-              className="absolute inset-0 pointer-events-none"
-              style={{ borderRadius: morph.endRadius }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, boxShadow: "0px 8px 24px rgba(19,15,41,0.45)" }}
-              transition={{ duration: 1, delay: 1.2, ease: "easeOut" }}
-            />
-
-            <motion.div
-              className="absolute inset-0 overflow-hidden"
-              layoutId="song-album"
-              style={{ borderRadius: morph.endRadius }}
-              transition={{
-                layout: {
-                  ...morph.spring,
-                },
-              }}
-            >
-              <img
-                alt={album}
-                className="absolute inset-0 max-w-none object-cover size-full"
-                src={albumImage}
-              />
-            </motion.div>
-              </motion.div>
-            </motion.div>
-          </AnimatePresence>
         </div>
+
+        {/* The continuous Embla track owns album-art movement; song details do not move with it. */}
+        <Carousel
+          className="w-full overflow-visible"
+          opts={getFinalCarouselOptions(songs.length)}
+          setApi={setCarouselApi}
+          tabIndex={0}
+        >
+          <CarouselContent
+            className="ml-0"
+            style={{ gap: `${carouselLayout.gapPx}px` }}
+            viewportClassName="touch-pan-y"
+          >
+            {songs.map((candidate, index) => {
+              const isActive = index === activeIndex;
+              const candidateKey = candidate.spotify_url ?? `${candidate.song_name}-${index}`;
+
+              return (
+                <CarouselItem
+                  key={candidateKey}
+                  className="basis-full pl-0 justify-start"
+                  style={{ flexBasis: carouselLayout.slideFlexBasis }}
+                >
+                  <motion.div
+                    ref={isActive ? albumContainerRef : undefined}
+                    className="relative aspect-square w-full"
+                    style={{
+                      width: carouselLayout.albumWidth,
+                      willChange: "transform, filter",
+                    }}
+                    animate={getAlbumSlideMotion(tilt, isActive)}
+                    transition={{
+                      type: "spring",
+                      stiffness: 260,
+                      damping: 30,
+                      mass: 0.6,
+                    }}
+                    onTouchStart={isActive ? requestGyroPermission : undefined}
+                  >
+                    <motion.div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ borderRadius: morph.endRadius }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1, boxShadow: "0px 8px 24px rgba(19,15,41,0.45)" }}
+                      transition={{ duration: 1, delay: 1.2, ease: "easeOut" }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 overflow-hidden"
+                      layoutId={index === 0 ? "song-album" : undefined}
+                      style={{ borderRadius: morph.endRadius }}
+                      transition={{ layout: { ...morph.spring } }}
+                    >
+                      <img
+                        alt={isActive ? album : ""}
+                        className="absolute inset-0 max-w-none object-cover size-full"
+                        src={candidate.album_image ?? imgAlbum}
+                      />
+                    </motion.div>
+                  </motion.div>
+                </CarouselItem>
+              );
+            })}
+          </CarouselContent>
+        </Carousel>
 
         {/* Song details stay anchored while their content blur-crossfades. */}
         <div
-          className="w-full px-[24px]"
-          style={{ minHeight: "clamp(74px, 10svh, 96px)" }}
+          className="relative w-full px-[24px]"
+          style={{ height: "clamp(74px, 10svh, 96px)" }}
           aria-live="polite"
         >
-          <AnimatePresence mode="wait" initial={false}>
+          <AnimatePresence initial={false}>
             <motion.div
               key={activeSongKey}
-              className="flex flex-col items-center w-full"
+              className="absolute inset-x-0 top-0 flex flex-col items-center w-full"
               style={{ gap: "clamp(2px, 0.6svh, 4px)" }}
               initial={detailMotion.initial}
               animate={detailMotion.animate}
@@ -389,22 +353,7 @@ export function SongResult({
                 {title}
               </p>
               <div className="flex flex-col items-center text-white/80 tracking-[-0.48px] w-full" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
-            {/* Artist — single-line with auto-scrolling marquee if overflowing */}
-            <div
-              ref={artistContainerRef}
-              className="overflow-hidden whitespace-nowrap w-full relative"
-              style={{ maskImage: artistOverflow > 0 ? "linear-gradient(to right, transparent, black 8%, black 92%, transparent)" : undefined, WebkitMaskImage: artistOverflow > 0 ? "linear-gradient(to right, transparent, black 8%, black 92%, transparent)" : undefined }}
-            >
-              <motion.span
-                ref={artistTextRef}
-                className="inline-block text-center w-full"
-                style={{ width: artistOverflow > 0 ? "auto" : "100%" }}
-                animate={artistOverflow > 0 ? { x: [0, -artistOverflow, 0] } : { x: 0 }}
-                transition={artistOverflow > 0 ? { duration: Math.max(10, artistOverflow / 12), repeat: Infinity, ease: "easeInOut", repeatDelay: 2.5 } : undefined}
-              >
-                by {artist}
-              </motion.span>
-            </div>
+              <p className="overflow-hidden text-center w-full whitespace-nowrap text-ellipsis">by {artist}</p>
             {/* Album — single-line, truncated */}
             <p className="overflow-hidden text-center w-full whitespace-nowrap text-ellipsis">From {album}</p>
               </div>
@@ -414,19 +363,16 @@ export function SongResult({
       </div>
 
       {/* Bottom buttons */}
-      <motion.div
+      <div
         className="flex flex-col items-center w-full mt-auto"
         style={{ gap: "clamp(6px, 1.2svh, 8px)" }}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.55 }}
       >
         {/* Add to Spotify button */}
         <motion.a
           className="w-full flex gap-[8px] items-center justify-center rounded-[1000px] text-white cursor-pointer"
           style={{
             padding: "clamp(10px, 1.8svh, 16px) 0",
-            opacity: spotifyUrl ? 1 : 0.6,
+            opacity: spotifyUrl ? 1 : 0,
             pointerEvents: spotifyUrl ? "auto" : "none",
             WebkitTapHighlightColor: "transparent",
           }}
@@ -511,7 +457,7 @@ export function SongResult({
             Start over
           </span>
         </motion.button>
-      </motion.div>
+      </div>
       </div>
     </div>
   );

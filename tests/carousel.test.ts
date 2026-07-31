@@ -1,7 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getNextIndex, getPreviousIndex, getSwipeDirection } from "../frontend/src/app/lib/carousel";
+import {
+  getCarouselIndex,
+  getFinalCarouselLayout,
+  getFinalCarouselOptions,
+  getNextIndex,
+  getPreviousIndex,
+  getSwipeDirection,
+} from "../frontend/src/app/lib/carousel";
+
+test("lays out full-width cards with a 40px gap", () => {
+  assert.deepEqual(getFinalCarouselLayout(), {
+    albumWidth: "100%",
+    gapPx: 40,
+    slideFlexBasis: "100%",
+  });
+});
+
+test("uses a snapped looping track for multiple final-screen songs", () => {
+  assert.deepEqual(getFinalCarouselOptions(5), {
+    align: "start",
+    containScroll: false,
+    dragFree: false,
+    loop: true,
+    skipSnaps: false,
+  });
+});
+
+test("disables looping when the final screen has one song", () => {
+  assert.equal(getFinalCarouselOptions(1).loop, false);
+});
 
 test("wraps the next index from the final song to the first song", () => {
   assert.equal(getNextIndex(4, 5), 0);
@@ -9,6 +38,16 @@ test("wraps the next index from the final song to the first song", () => {
 
 test("wraps the previous index from the first song to the final song", () => {
   assert.equal(getPreviousIndex(0, 5), 4);
+});
+
+test("normalizes Embla's selected snap for a looping five-song carousel", () => {
+  assert.equal(getCarouselIndex(5, 5), 0);
+  assert.equal(getCarouselIndex(-1, 5), 4);
+});
+
+test("keeps the detail index in range after Embla loops", () => {
+  assert.equal(getCarouselIndex(9, 5), 4);
+  assert.equal(getCarouselIndex(10, 5), 0);
 });
 
 test("keeps navigation safe for a one-song list", () => {

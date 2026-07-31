@@ -6,9 +6,9 @@ import { getSongDetailMotion } from "../frontend/src/app/lib/detail-motion";
 test("uses blur and opacity without positional layout motion for song details", () => {
   const motion = getSongDetailMotion(false);
 
-  assert.deepEqual(motion.initial, { opacity: 0, filter: "blur(10px)" });
+  assert.deepEqual(motion.initial, { opacity: 0, filter: "blur(12px)" });
   assert.deepEqual(motion.animate, { opacity: 1, filter: "blur(0px)" });
-  assert.deepEqual(motion.exit, { opacity: 0, filter: "blur(8px)" });
+  assert.deepEqual(motion.exit, { opacity: 0, filter: "blur(12px)" });
   for (const state of [motion.initial, motion.animate, motion.exit]) {
     assert.equal("x" in state, false);
     assert.equal("y" in state, false);
