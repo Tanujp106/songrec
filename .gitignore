@@ -30,6 +30,7 @@ tsconfig.tsbuildinfo
 **/dialkit-presets*
 
 # local tooling / agent dirs
+.worktrees/
 .agent/
 .agents/
 .claude/
