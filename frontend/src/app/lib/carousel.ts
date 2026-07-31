@@ -13,6 +13,10 @@ export function getPreviousIndex(index: number, length: number): number {
   return normalizeIndex(index - 1, length);
 }
 
+export function getCarouselIndex(selectedSnap: number, length: number): number {
+  return normalizeIndex(selectedSnap, length);
+}
+
 export function getSwipeDirection({
   startX,
   endX,

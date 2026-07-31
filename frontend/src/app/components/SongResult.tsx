@@ -3,8 +3,14 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
-import { getNextIndex, getPreviousIndex, getSwipeDirection } from "../lib/carousel";
+import { getCarouselIndex, getNextIndex } from "../lib/carousel";
 import { getSongDetailMotion } from "../lib/detail-motion";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  type CarouselApi,
+} from "./ui/carousel";
 
 const POPULARITY_LABELS = ["underrated", "moderate", "well-known", "popular"];
 
@@ -13,6 +19,7 @@ function useGyroParallax(
   containerRef: React.RefObject<HTMLDivElement | null>,
   maxOffset = 6,
   maxRotation = 3,
+  activeKey?: string,
 ) {
   const [permissionGranted, setPermissionGranted] = useState(false);
 
@@ -96,7 +103,7 @@ function useGyroParallax(
       window.clearTimeout(startTimer);
       el.style.transform = "";
     };
-  }, [containerRef, maxOffset, maxRotation, permissionGranted]);
+  }, [activeKey, containerRef, maxOffset, maxRotation, permissionGranted]);
 
   return { requestPermission };
 }
@@ -105,6 +112,7 @@ function useGyroParallax(
 function use3DTilt(
   containerRef: React.RefObject<HTMLDivElement | null>,
   maxRotation = 4,
+  activeKey?: string,
 ) {
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
   const animationFrameRef = useRef<number | null>(null);
@@ -157,7 +165,7 @@ function use3DTilt(
       el.removeEventListener("touchend", handleReset);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [containerRef, maxRotation]);
+  }, [activeKey, containerRef, maxRotation]);
 
   return { tilt };
 }
@@ -189,8 +197,7 @@ export function SongResult({
   morph,
 }: SongResultProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [swipeDirection, setSwipeDirection] = useState<"next" | "previous">("next");
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const song = songs[activeIndex] ?? null;
   const nextSong = songs[getNextIndex(activeIndex, songs.length)] ?? null;
   const popLabel = POPULARITY_LABELS[popularity] || "popular";
@@ -204,22 +211,32 @@ export function SongResult({
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [songs]);
+    carouselApi?.scrollTo(0, true);
+  }, [carouselApi, songs]);
 
-  const navigate = useCallback((direction: "next" | "previous") => {
-    if (songs.length < 2) return;
-    setSwipeDirection(direction);
-    setActiveIndex((index) => direction === "next"
-      ? getNextIndex(index, songs.length)
-      : getPreviousIndex(index, songs.length));
-  }, [songs.length]);
+  useEffect(() => {
+    if (!carouselApi) return;
+
+    const syncActiveSong = () => {
+      setActiveIndex(getCarouselIndex(carouselApi.selectedScrollSnap(), songs.length));
+    };
+
+    syncActiveSong();
+    carouselApi.on("select", syncActiveSong);
+    carouselApi.on("reInit", syncActiveSong);
+
+    return () => {
+      carouselApi.off("select", syncActiveSong);
+      carouselApi.off("reInit", syncActiveSong);
+    };
+  }, [carouselApi, songs.length]);
 
   const activeSongKey = song?.spotify_url ?? `${song?.song_name ?? "empty"}-${activeIndex}`;
 
   // Gyroscope parallax on album art
   const albumContainerRef = useRef<HTMLDivElement>(null);
-  const { requestPermission: requestGyroPermission } = useGyroParallax(albumContainerRef);
-  const { tilt } = use3DTilt(albumContainerRef);
+  const { requestPermission: requestGyroPermission } = useGyroParallax(albumContainerRef, 6, 3, activeSongKey);
+  const { tilt } = use3DTilt(albumContainerRef, 4, activeSongKey);
 
   // Auto-request permission on mount for non-iOS (Android doesn't need user gesture)
   useEffect(() => {
@@ -249,30 +266,7 @@ export function SongResult({
   return (
     <div
       className="relative w-full flex-1 min-h-0 touch-pan-y"
-      tabIndex={0}
       aria-label="Song recommendations. Swipe left for the next song and right for the previous song."
-      onPointerDown={(event) => {
-        pointerStartRef.current = { x: event.clientX, y: event.clientY };
-      }}
-      onPointerUp={(event) => {
-        const start = pointerStartRef.current;
-        pointerStartRef.current = null;
-        if (!start) return;
-        const direction = getSwipeDirection({
-          startX: start.x,
-          endX: event.clientX,
-          startY: start.y,
-          endY: event.clientY
-        });
-        if (direction) navigate(direction);
-      }}
-      onPointerCancel={() => {
-        pointerStartRef.current = null;
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") navigate("previous");
-        if (event.key === "ArrowRight") navigate("next");
-      }}
     >
       {nextSong && songs.length > 1 && (
         <motion.div
@@ -310,64 +304,68 @@ export function SongResult({
           </p>
         </motion.div>
 
-        {/* Album art — morph target for layoutId transition */}
-        <div className="w-full">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={activeSongKey}
-              initial={{ opacity: 0, x: swipeDirection === "next" ? 28 : -28 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: swipeDirection === "next" ? -28 : 28 }}
-              transition={{ duration: shouldReduceMotion ? 0.12 : 0.24, ease: "easeOut" }}
-            >
-              <motion.div
-                ref={albumContainerRef}
-                className="relative aspect-square mx-auto"
-                style={{
-                  width: "min(100%, 76vw, 36vh)",
-                  willChange: "transform",
-                }}
-                animate={{
-                  rotateX: tilt.rotateX,
-                  rotateY: tilt.rotateY,
-                }}
-                transition={{
-                  type: "spring",
-                  stiffness: 260,
-                  damping: 30,
-                  mass: 0.6,
-                }}
-                onTouchStart={requestGyroPermission}
-              >
-            {/* Shadow — fades in only after the morph animation settles */}
-            <motion.div
-              className="absolute inset-0 pointer-events-none"
-              style={{ borderRadius: morph.endRadius }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, boxShadow: "0px 8px 24px rgba(19,15,41,0.45)" }}
-              transition={{ duration: 1, delay: 1.2, ease: "easeOut" }}
-            />
+        {/* The continuous Embla track owns album-art movement; song details do not move with it. */}
+        <Carousel
+          className="w-full overflow-visible"
+          opts={{ align: "start", loop: songs.length > 1 }}
+          setApi={setCarouselApi}
+          tabIndex={0}
+        >
+          <CarouselContent className="ml-0">
+            {songs.map((candidate, index) => {
+              const isActive = index === activeIndex;
+              const candidateKey = candidate.spotify_url ?? `${candidate.song_name}-${index}`;
 
-            <motion.div
-              className="absolute inset-0 overflow-hidden"
-              layoutId="song-album"
-              style={{ borderRadius: morph.endRadius }}
-              transition={{
-                layout: {
-                  ...morph.spring,
-                },
-              }}
-            >
-              <img
-                alt={album}
-                className="absolute inset-0 max-w-none object-cover size-full"
-                src={albumImage}
-              />
-            </motion.div>
-              </motion.div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
+              return (
+                <CarouselItem key={candidateKey} className="basis-full pl-0">
+                  <motion.div
+                    ref={isActive ? albumContainerRef : undefined}
+                    className="relative aspect-square mx-auto"
+                    style={{
+                      width: "min(100%, 76vw, 36vh)",
+                      willChange: "transform, filter",
+                    }}
+                    animate={{
+                      rotateX: isActive ? tilt.rotateX : 0,
+                      rotateY: isActive ? tilt.rotateY : 0,
+                      opacity: isActive ? 1 : 0.78,
+                      filter: isActive || shouldReduceMotion
+                        ? "blur(0px) brightness(1) saturate(1)"
+                        : "blur(12px) brightness(0.76) saturate(0.72)",
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 260,
+                      damping: 30,
+                      mass: 0.6,
+                    }}
+                    onTouchStart={isActive ? requestGyroPermission : undefined}
+                  >
+                    <motion.div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ borderRadius: morph.endRadius }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1, boxShadow: "0px 8px 24px rgba(19,15,41,0.45)" }}
+                      transition={{ duration: 1, delay: 1.2, ease: "easeOut" }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 overflow-hidden"
+                      layoutId={index === 0 ? "song-album" : undefined}
+                      style={{ borderRadius: morph.endRadius }}
+                      transition={{ layout: { ...morph.spring } }}
+                    >
+                      <img
+                        alt={isActive ? album : ""}
+                        className="absolute inset-0 max-w-none object-cover size-full"
+                        src={candidate.album_image ?? imgAlbum}
+                      />
+                    </motion.div>
+                  </motion.div>
+                </CarouselItem>
+              );
+            })}
+          </CarouselContent>
+        </Carousel>
 
         {/* Song details stay anchored while their content blur-crossfades. */}
         <div
