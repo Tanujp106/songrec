@@ -7,7 +7,8 @@ const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID ?? "";
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET ?? "";
 const SPOTIFY_REDIRECT_URI =
   process.env.SPOTIFY_REDIRECT_URI ??
-  "http://127.0.0.1:3000/api/spotify/callback";
+  "http://127.0.0.1:3001/api/spotify/callback";
+const SPOTIFY_OAUTH_TIMEOUT_MS = 10_000;
 
 function html(body: string) {
   return `<!doctype html>
@@ -62,22 +63,30 @@ export async function GET(request: Request) {
     `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`
   ).toString("base64");
 
-  const tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${authHeader}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: SPOTIFY_REDIRECT_URI
-    }).toString()
-  });
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${authHeader}`,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: SPOTIFY_REDIRECT_URI
+      }).toString(),
+      signal: AbortSignal.timeout(SPOTIFY_OAUTH_TIMEOUT_MS)
+    });
+  } catch {
+    return new NextResponse(html("<h2>Token exchange failed</h2>"), {
+      status: 500,
+      headers: { "Content-Type": "text/html", ...corsHeaders() }
+    });
+  }
 
   if (!tokenResponse.ok) {
-    const text = await tokenResponse.text();
-    return new NextResponse(html(`<h2>Token exchange failed</h2><pre>${text}</pre>`), {
+    return new NextResponse(html("<h2>Token exchange failed</h2>"), {
       status: 500,
       headers: { "Content-Type": "text/html", ...corsHeaders() }
     });

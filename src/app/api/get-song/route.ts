@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
 import { ALLOWED_MOODS, clamp, normalizeMood } from "@/lib/utils";
 import { corsHeaders } from "@/lib/cors";
+import { jsonInternalError } from "@/lib/http";
 import { createHash } from "crypto";
 
 export const runtime = "nodejs";
@@ -155,11 +156,8 @@ export async function GET(request: Request) {
     const { data, error } = await query;
 
     if (error) {
-      return jsonWithCors(
-        { error: `Supabase query failed: ${error.message}` },
-        { status: 500 },
-        origin
-      );
+      console.error("[get-song] Supabase query failed:", error.message);
+      return jsonInternalError({ headers: corsHeaders(origin) });
     }
 
     if (!data || data.length === 0) {
@@ -219,6 +217,6 @@ export async function GET(request: Request) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[get-song] Unhandled error:", message);
     const origin = request.headers.get("origin");
-    return jsonWithCors({ error: message }, { status: 500 }, origin);
+    return jsonInternalError({ headers: corsHeaders(origin) });
   }
 }

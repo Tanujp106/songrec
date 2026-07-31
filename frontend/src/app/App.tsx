@@ -12,6 +12,7 @@ import {
 } from "./lib/api";
 import { Agentation } from "agentation";
 import { Analytics } from "@vercel/analytics/react";
+import { createRequestGuard } from "./lib/request-guard";
 
 const DEFAULT_FROM = "#5A54F2";
 
@@ -48,23 +49,9 @@ function mixHex(a: string, b: string, ratio: number): string {
   return `#${toHex(aR + (bR - aR) * t)}${toHex(aG + (bG - aG) * t)}${toHex(aB + (bB - aB) * t)}`;
 }
 
-// Dev-only tools - only renders in development
+// DialKit is optional and is not part of the checked-in frontend dependencies.
 function DevTools() {
-  const [DialRoot, setDialRoot] = useState<any>(null);
-
-  useEffect(() => {
-    if (import.meta.env.DEV) {
-      import("dialkit/styles.css");
-      import("dialkit").then((mod) => {
-        setDialRoot(() => mod.DialRoot);
-      }).catch(() => {
-        // dialkit not installed, skip
-      });
-    }
-  }, []);
-
-  if (!import.meta.env.DEV || !DialRoot) return null;
-  return <DialRoot position="top-left" />;
+  return null;
 }
 
 export default function App() {
@@ -75,6 +62,7 @@ export default function App() {
   const [albumImagesMood, setAlbumImagesMood] = useState<string | null>(null);
   const [dialNudge, setDialNudge] = useState(false);
   const [btnShake, setBtnShake] = useState(false);
+  const [isRecommending, setIsRecommending] = useState(false);
   const appDial = {
     bgTransitionDuration: 0.5,
     bgBrightnessOffset: 0.22,
@@ -152,6 +140,7 @@ export default function App() {
 
   // ── A: Pre-fetch ALL mood images on mount ──
   const imageCache = useRef<Map<string, string[]>>(new Map());
+  const recommendRequestGuard = useRef(createRequestGuard());
   const [albumImages, setAlbumImages] = useState<string[]>([]);
   const preloadedMoodRef = useRef<string | null>(null);
 
@@ -185,34 +174,50 @@ export default function App() {
 
   const handleRecommend = useCallback(async () => {
     if (!confirmedMood) return;
-    const mood = confirmedMood;
-    const sliderValue = Math.round((popularity / 3) * 100);
-    setSong(null);
-    setScreen("loading");
+    const requestId = recommendRequestGuard.current.begin();
+    if (requestId === null) return;
 
-    // 60s in dev for tuning, 2.5s in prod
-    const LOADING_DELAY = import.meta.env.DEV ? 2000 : 2000;
+    setIsRecommending(true);
 
-    const minDelay = new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
+    try {
+      const mood = confirmedMood;
+      const sliderValue = Math.round((popularity / 3) * 100);
+      setSong(null);
+      setScreen("loading");
 
-    // Images should already be in cache from mount fetch.
-    // If not yet in state (race condition), pull from cache now.
-    if (albumImagesMood !== mood || albumImages.length === 0) {
-      const cached = imageCache.current.get(mood);
-      if (cached && cached.length > 0) {
-        setAlbumImages(cached);
-        setAlbumImagesMood(mood);
-        preloadImageFiles(cached, 20);
+      // 60s in dev for tuning, 2.5s in prod
+      const LOADING_DELAY = import.meta.env.DEV ? 2000 : 2000;
+
+      const minDelay = new Promise((resolve) => setTimeout(resolve, LOADING_DELAY));
+
+      // Images should already be in cache from mount fetch.
+      // If not yet in state (race condition), pull from cache now.
+      if (albumImagesMood !== mood || albumImages.length === 0) {
+        const cached = imageCache.current.get(mood);
+        if (cached && cached.length > 0) {
+          setAlbumImages(cached);
+          setAlbumImagesMood(mood);
+          preloadImageFiles(cached, 20);
+        }
+      }
+
+      const result = await fetchRecommendation(mood, sliderValue);
+      await minDelay;
+      if (recommendRequestGuard.current.isCurrent(requestId)) {
+        setSong(result);
+        setScreen("result");
+      }
+    } finally {
+      if (recommendRequestGuard.current.isCurrent(requestId)) {
+        recommendRequestGuard.current.release(requestId);
+        setIsRecommending(false);
       }
     }
-
-    const result = await fetchRecommendation(mood, sliderValue);
-    setSong(result);
-    await minDelay;
-    setScreen("result");
   }, [confirmedMood, popularity, albumImagesMood, albumImages.length]);
 
   const handleStartOver = () => {
+    recommendRequestGuard.current.cancel();
+    setIsRecommending(false);
     setScreen("mood");
     setSong(null);
     // Don't clear albumImages — they're cached in imageCache ref
@@ -310,8 +315,8 @@ export default function App() {
                           style={{
                             fontSize: "clamp(15px, 2.6svh, 18px)",
                             padding: "clamp(10px, 1.8svh, 14px) 0",
-                            opacity: confirmedMood ? 1 : 0.55,
-                            cursor: confirmedMood ? "pointer" : "not-allowed",
+                            opacity: confirmedMood && !isRecommending ? 1 : 0.55,
+                            cursor: confirmedMood && !isRecommending ? "pointer" : "not-allowed",
                             WebkitTapHighlightColor: "transparent",
                           }}
                           animate={{
@@ -324,8 +329,8 @@ export default function App() {
                             ease: "easeInOut",
                             x: { duration: 0.5, ease: "easeInOut" },
                           }}
-                          whileHover={confirmedMood ? { scale: 1.01 } : undefined}
-                          whileTap={confirmedMood ? { scale: 0.98, y: 1 } : undefined}
+                          whileHover={confirmedMood && !isRecommending ? { scale: 1.01 } : undefined}
+                          whileTap={confirmedMood && !isRecommending ? { scale: 0.98, y: 1 } : undefined}
                           onClick={() => {
                             if (!confirmedMood) {
                               setBtnShake(true);
@@ -338,7 +343,8 @@ export default function App() {
                             }
                             handleRecommend();
                           }}
-                          aria-disabled={!confirmedMood}
+                          disabled={!confirmedMood || isRecommending}
+                          aria-disabled={!confirmedMood || isRecommending}
                         >
                           Recommend
                         </motion.button>

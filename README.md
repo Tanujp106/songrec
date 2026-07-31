@@ -10,7 +10,7 @@ Mood-based music recommendations from a handpicked Spotify collection. Pick a vi
 ## Stack
 
 **Frontend** — React 18, Vite, TypeScript, Tailwind CSS, Framer Motion  
-**Backend** — Next.js 15 API routes, Spotify Web API, Supabase
+**Backend** — Next.js 14 API routes, Spotify Web API, Supabase
 
 ## Setup
 
@@ -30,26 +30,25 @@ Mood-based music recommendations from a handpicked Spotify collection. Pick a vi
    ```env
    SPOTIFY_CLIENT_ID=
    SPOTIFY_CLIENT_SECRET=
-   NEXT_PUBLIC_SUPABASE_URL=
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=
+   SUPABASE_URL=
+   SUPABASE_SECRET_KEY=
+   # Optional: required only for the playlist-import OAuth flow.
+   SPOTIFY_REDIRECT_URI=http://127.0.0.1:3001/api/spotify/callback
    ```
 
 3. Run both servers:
 
    ```bash
-   # Terminal 1 — API (localhost:3000)
+   # Starts the frontend at http://localhost:3000 and API at http://localhost:3001
    npm run dev
-
-   # Terminal 2 — Frontend (localhost:5173)
-   cd frontend && npm run dev
    ```
 
-4. Open `http://localhost:5173`
+4. Open `http://localhost:3000`
 
 ## Spotify Setup
 
 1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Add `http://localhost:5173` to Redirect URIs
+2. Add `http://127.0.0.1:3001/api/spotify/callback` to Redirect URIs
 3. Copy Client ID and Secret into `.env.local`
 
 ## Deployment

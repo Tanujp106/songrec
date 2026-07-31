@@ -17,5 +17,12 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/imports/mood-selection-home.tsx",
+    "src/imports/SongrecAskingUserForMood.tsx",
+    "src/imports/SongrecAskingUserForMood-6-45.tsx",
+    "src/imports/SongrecAskingUserForMood-34-93.tsx",
+    "src/imports/SongrecAskingUserForMood-34-127.tsx"
+  ]
 }

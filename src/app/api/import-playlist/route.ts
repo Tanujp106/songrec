@@ -8,10 +8,11 @@ import {
   normalizeMoodArray,
   filterAllowedMoods
 } from "@/lib/utils";
-import { jsonError, parseJson } from "@/lib/http";
+import { jsonInternalError, parseJson } from "@/lib/http";
 import { corsHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
+const MAX_PLAYLIST_ITEMS = 1_000;
 
 function jsonWithCors(body: unknown, init?: ResponseInit, requestOrigin?: string | null) {
   return NextResponse.json(body, {
@@ -109,6 +110,9 @@ async function fetchPlaylistTracks(
         >(url);
         items.push(...(((data as any).items ?? []) as SpotifyTrackItem[]));
         url = ((data as any).next ?? "") as string;
+        if (items.length >= MAX_PLAYLIST_ITEMS && url) {
+          throw new Error(`Playlist exceeds the ${MAX_PLAYLIST_ITEMS}-track import limit`);
+        }
       }
       log?.(`Fetched ${items.length} playlist items.`);
       return items;
@@ -251,13 +255,21 @@ export async function POST(request: Request) {
           {
             error:
               "Spotify returned 403 Forbidden for this playlist. If you configured OAuth for import (Authorization Code Flow), set SPOTIFY_REFRESH_TOKEN and retry. Otherwise this playlist likely requires user context and cannot be imported with Client Credentials alone.",
-            details: message
+            details: "Spotify request was forbidden."
           },
           { status: 403 },
           origin
         );
       }
-      return jsonWithCors({ error: message }, { status: 500 }, origin);
+      if (message.includes("import limit")) {
+        return jsonWithCors(
+          { error: "This playlist exceeds the 1,000-track import limit." },
+          { status: 400 },
+          origin
+        );
+      }
+      console.error("[import-playlist] Spotify request failed:", message);
+      return jsonInternalError({ headers: corsHeaders(origin) });
     }
 
     const recordMap = new Map<string, SongInsert>();
@@ -387,11 +399,8 @@ export async function POST(request: Request) {
         .in("spotify_track_id", chunk);
 
       if (error) {
-        return jsonWithCors(
-          { error: `Supabase select failed: ${error.message}` },
-          { status: 500 },
-          origin
-        );
+        console.error("[import-playlist] Supabase select failed:", error.message);
+        return jsonInternalError({ headers: corsHeaders(origin) });
       }
 
       const rows = (data ?? []) as {
@@ -421,11 +430,8 @@ export async function POST(request: Request) {
         .upsert(chunk as any, { onConflict: "spotify_track_id" });
 
       if (error) {
-        return jsonWithCors(
-          { error: `Supabase upsert failed: ${error.message}` },
-          { status: 500 },
-          origin
-        );
+        console.error("[import-playlist] Supabase upsert failed:", error.message);
+        return jsonInternalError({ headers: corsHeaders(origin) });
       }
     }
 
@@ -444,7 +450,8 @@ export async function POST(request: Request) {
     }, undefined, origin);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[import-playlist] Unhandled error:", message);
     const origin = request.headers.get("origin");
-    return jsonWithCors({ error: message }, { status: 500 }, origin);
+    return jsonInternalError({ headers: corsHeaders(origin) });
   }
 }

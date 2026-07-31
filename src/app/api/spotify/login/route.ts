@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID ?? "";
 const SPOTIFY_REDIRECT_URI =
   process.env.SPOTIFY_REDIRECT_URI ??
-  "http://127.0.0.1:3000/api/spotify/callback";
+  "http://127.0.0.1:3001/api/spotify/callback";
 
 export async function GET(request: Request) {
   const origin = request.headers.get("origin");

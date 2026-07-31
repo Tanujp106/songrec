@@ -105,7 +105,7 @@ function use3DTilt(
   maxRotation = 4,
 ) {
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;

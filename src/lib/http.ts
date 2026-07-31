@@ -7,6 +7,13 @@ export function jsonError(message: string, status = 400, details?: unknown) {
   );
 }
 
+export function jsonInternalError(init?: ResponseInit) {
+  return NextResponse.json({ error: "Internal server error" }, {
+    ...init,
+    status: 500
+  });
+}
+
 export async function parseJson(request: Request): Promise<any> {
   try {
     return await request.json();

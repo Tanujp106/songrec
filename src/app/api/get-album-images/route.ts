@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
 import { ALLOWED_MOODS, normalizeMood } from "@/lib/utils";
 import { corsHeaders } from "@/lib/cors";
+import { jsonInternalError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -68,11 +69,8 @@ export async function GET(request: Request) {
     const { data, error } = await query;
 
     if (error) {
-      return jsonWithCors(
-        { error: `Supabase query failed: ${error.message}` },
-        { status: 500 },
-        origin
-      );
+      console.error("[get-album-images] Supabase query failed:", error.message);
+      return jsonInternalError({ headers: corsHeaders(origin) });
     }
 
     const rows = (data ?? []) as { album_image: string | null }[];
@@ -86,6 +84,6 @@ export async function GET(request: Request) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[get-album-images] Unhandled error:", message);
     const origin = request.headers.get("origin");
-    return jsonWithCors({ error: message }, { status: 500 }, origin);
+    return jsonInternalError({ headers: corsHeaders(origin) });
   }
 }

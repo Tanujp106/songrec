@@ -1,24 +1,31 @@
 import { requireEnv } from "./env";
 
-const SPOTIFY_CLIENT_ID = requireEnv("SPOTIFY_CLIENT_ID");
-const SPOTIFY_CLIENT_SECRET = requireEnv("SPOTIFY_CLIENT_SECRET");
-const SPOTIFY_REFRESH_TOKEN = (process.env.SPOTIFY_REFRESH_TOKEN ?? "").trim();
-
 let cachedToken: { accessToken: string; expiresAt: number; type: "user" | "app" } | null = null;
+const SPOTIFY_REQUEST_TIMEOUT_MS = 10_000;
+
+function getSpotifyConfig() {
+  return {
+    clientId: requireEnv("SPOTIFY_CLIENT_ID"),
+    clientSecret: requireEnv("SPOTIFY_CLIENT_SECRET"),
+    refreshToken: (process.env.SPOTIFY_REFRESH_TOKEN ?? "").trim()
+  };
+}
 
 export async function getSpotifyAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
     return cachedToken.accessToken;
   }
 
+  const { clientId, clientSecret, refreshToken } = getSpotifyConfig();
+
   const authHeader = Buffer.from(
-    `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`
+    `${clientId}:${clientSecret}`
   ).toString("base64");
 
   const body = new URLSearchParams();
-  if (SPOTIFY_REFRESH_TOKEN.length > 0) {
+  if (refreshToken.length > 0) {
     body.set("grant_type", "refresh_token");
-    body.set("refresh_token", SPOTIFY_REFRESH_TOKEN);
+    body.set("refresh_token", refreshToken);
   } else {
     body.set("grant_type", "client_credentials");
   }
@@ -29,12 +36,12 @@ export async function getSpotifyAccessToken(): Promise<string> {
       Authorization: `Basic ${authHeader}`,
       "Content-Type": "application/x-www-form-urlencoded"
     },
-    body: body.toString()
+    body: body.toString(),
+    signal: AbortSignal.timeout(SPOTIFY_REQUEST_TIMEOUT_MS)
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Spotify token request failed: ${message}`);
+    throw new Error("Spotify token request failed");
   }
 
   const data = (await response.json()) as {
@@ -45,7 +52,7 @@ export async function getSpotifyAccessToken(): Promise<string> {
   cachedToken = {
     accessToken: data.access_token,
     expiresAt: Date.now() + data.expires_in * 1000,
-    type: SPOTIFY_REFRESH_TOKEN.length > 0 ? "user" : "app"
+    type: refreshToken.length > 0 ? "user" : "app"
   };
 
   return cachedToken.accessToken;
@@ -59,7 +66,8 @@ async function spotifyFetch<T>(url: string, accessToken: string, attempt = 0): P
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${accessToken}`
-    }
+    },
+    signal: AbortSignal.timeout(SPOTIFY_REQUEST_TIMEOUT_MS)
   });
 
   if (response.status === 429 && attempt < 3) {
@@ -75,10 +83,7 @@ async function spotifyFetch<T>(url: string, accessToken: string, attempt = 0): P
   }
 
   if (!response.ok) {
-    const bodyText = await response.text().catch(() => "");
-    throw new Error(
-      `Spotify API request failed (${response.status}) for ${url}: ${bodyText}`
-    );
+    throw new Error(`Spotify API request failed (${response.status})`);
   }
 
   return (await response.json()) as T;

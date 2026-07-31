@@ -12,9 +12,13 @@ export type SongRecommendation = {
   release_date_precision: string | null;
 };
 
+const viteEnv = (import.meta as ImportMeta & {
+  env?: { VITE_API_BASE_URL?: string; PROD?: boolean };
+}).env;
+
 const API_BASE =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
-  (import.meta.env.PROD ? "" : "http://localhost:3001");
+  viteEnv?.VITE_API_BASE_URL ??
+  (viteEnv?.PROD ? "" : "http://localhost:3001");
 
 const ALL_MOODS = [
   "party", "feel-good", "soft", "indie",
@@ -140,6 +144,31 @@ function getFallback(mood: string): SongRecommendation {
   return FALLBACK_SONGS[key] ?? FALLBACK_SONGS.indie;
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+export function isSongRecommendation(value: unknown): value is SongRecommendation {
+  if (!value || typeof value !== "object") return false;
+  const song = value as Record<string, unknown>;
+  return (
+    typeof song.song_name === "string" &&
+    song.song_name.length > 0 &&
+    Array.isArray(song.artist) &&
+    song.artist.length > 0 &&
+    song.artist.every((artist) => typeof artist === "string") &&
+    isNullableString(song.album_image) &&
+    isNullableString(song.spotify_url) &&
+    typeof song.popularity === "number" &&
+    (song.release_year === null || typeof song.release_year === "number") &&
+    (song.duration_ms === null || typeof song.duration_ms === "number") &&
+    isNullableString(song.album_name) &&
+    isNullableString(song.album_id) &&
+    isNullableString(song.release_date) &&
+    isNullableString(song.release_date_precision)
+  );
+}
+
 export async function fetchRecommendation(
   mood: string,
   sliderValue: number
@@ -169,7 +198,7 @@ export async function fetchRecommendation(
     return getFallback(mood);
   }
 
-  return data as SongRecommendation;
+  return isSongRecommendation(data) ? data : getFallback(mood);
 }
 
 export async function fetchMoodImages(
