@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
-import { getCarouselIndex, getFinalCarouselOptions } from "../lib/carousel";
+import { getCarouselIndex, getFinalCarouselLayout, getFinalCarouselOptions } from "../lib/carousel";
 import { getAlbumSlideMotion } from "../lib/carousel-motion";
 import { getSongDetailMotion } from "../lib/detail-motion";
 import {
@@ -196,6 +196,7 @@ export function SongResult({
   const spotifyUrl = song?.spotify_url ?? null;
   const shouldReduceMotion = useReducedMotion() ?? false;
   const detailMotion = getSongDetailMotion(shouldReduceMotion);
+  const carouselLayout = getFinalCarouselLayout();
 
   useEffect(() => {
     setActiveIndex(0);
@@ -275,7 +276,11 @@ export function SongResult({
           setApi={setCarouselApi}
           tabIndex={0}
         >
-          <CarouselContent className="ml-0" viewportClassName="touch-pan-y">
+          <CarouselContent
+            className="ml-0"
+            style={{ gap: `${carouselLayout.gapPx}px` }}
+            viewportClassName="touch-pan-y"
+          >
             {songs.map((candidate, index) => {
               const isActive = index === activeIndex;
               const candidateKey = candidate.spotify_url ?? `${candidate.song_name}-${index}`;
@@ -284,13 +289,13 @@ export function SongResult({
                 <CarouselItem
                   key={candidateKey}
                   className="basis-full pl-0 justify-start"
-                  style={{ flexBasis: "calc(100% - 72px)" }}
+                  style={{ flexBasis: carouselLayout.slideFlexBasis }}
                 >
                   <motion.div
                     ref={isActive ? albumContainerRef : undefined}
-                    className="relative aspect-square ml-[12%]"
+                    className="relative aspect-square w-full"
                     style={{
-                      width: "min(100%, 76vw, 36vh)",
+                      width: carouselLayout.albumWidth,
                       willChange: "transform, filter",
                     }}
                     animate={getAlbumSlideMotion(tilt, isActive)}

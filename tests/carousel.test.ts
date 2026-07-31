@@ -3,11 +3,20 @@ import test from "node:test";
 
 import {
   getCarouselIndex,
+  getFinalCarouselLayout,
   getFinalCarouselOptions,
   getNextIndex,
   getPreviousIndex,
   getSwipeDirection,
 } from "../frontend/src/app/lib/carousel";
+
+test("lays out full-width cards with a 40px gap", () => {
+  assert.deepEqual(getFinalCarouselLayout(), {
+    albumWidth: "100%",
+    gapPx: 40,
+    slideFlexBasis: "100%",
+  });
+});
 
 test("uses a snapped looping track for multiple final-screen songs", () => {
   assert.deepEqual(getFinalCarouselOptions(5), {

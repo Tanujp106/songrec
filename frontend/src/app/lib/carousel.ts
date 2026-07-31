@@ -1,5 +1,13 @@
 const SWIPE_THRESHOLD_PX = 56;
 
+export function getFinalCarouselLayout() {
+  return {
+    albumWidth: "100%",
+    gapPx: 40,
+    slideFlexBasis: "100%",
+  };
+}
+
 export function getFinalCarouselOptions(songCount: number) {
   return {
     align: "start" as const,
