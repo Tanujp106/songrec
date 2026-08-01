@@ -1,10 +1,12 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useDialKit } from "dialkit";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
 import {
   getCarouselIndex,
+  finalCarouselDialConfig,
   getFinalCarouselLayout,
   getFinalCarouselOptions,
   getResultScreenLayout,
@@ -190,6 +192,10 @@ export function SongResult({
   songs,
   morph,
 }: SongResultProps) {
+  const carouselDials = useDialKit("SONGREC final carousel", finalCarouselDialConfig, {
+    id: "songrec-final-carousel",
+    persist: { key: "songrec:final-carousel", presets: true },
+  });
   const [activeIndex, setActiveIndex] = useState(0);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const song = songs[activeIndex] ?? null;
@@ -201,7 +207,7 @@ export function SongResult({
   const spotifyUrl = song?.spotify_url ?? null;
   const shouldReduceMotion = useReducedMotion() ?? false;
   const detailMotion = getSongDetailMotion(shouldReduceMotion);
-  const carouselLayout = getFinalCarouselLayout();
+  const carouselLayout = getFinalCarouselLayout(carouselDials);
   const resultScreenLayout = getResultScreenLayout();
 
   useEffect(() => {
@@ -230,8 +236,17 @@ export function SongResult({
 
   // Gyroscope parallax on album art
   const albumContainerRef = useRef<HTMLDivElement>(null);
-  const { requestPermission: requestGyroPermission } = useGyroParallax(albumContainerRef, 6, 3, activeSongKey);
-  const { tilt } = use3DTilt(albumContainerRef, 4, activeSongKey);
+  const { requestPermission: requestGyroPermission } = useGyroParallax(
+    albumContainerRef,
+    carouselDials.tilt.gyroXStrength,
+    carouselDials.tilt.gyroYStrength,
+    activeSongKey,
+  );
+  const { tilt } = use3DTilt(
+    albumContainerRef,
+    carouselDials.tilt.pointerTiltStrength,
+    activeSongKey,
+  );
 
   // Auto-request permission on mount for non-iOS (Android doesn't need user gesture)
   useEffect(() => {
@@ -249,14 +264,16 @@ export function SongResult({
       className="relative w-full flex-1 min-h-0 touch-pan-y"
       aria-label="Song recommendations. Swipe left for the next song and right for the previous song."
     >
-      {songs.length > 1 && (
+      {songs.length > 1 && carouselDials.edgeCue.enabled && (
         <div
           aria-hidden="true"
-          className="absolute top-[33%] right-0 z-[1] h-[min(76vw,36vh)] w-[52px] pointer-events-none"
+          className="absolute top-[33%] right-0 z-[1] pointer-events-none"
           style={{
-            background: "linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,0.14))",
-            backdropFilter: "blur(14px)",
-            WebkitBackdropFilter: "blur(14px)",
+            height: `min(${carouselDials.geometry.slideWidthPercent}vw, 36vh)`,
+            width: `${carouselDials.edgeCue.widthPx}px`,
+            background: `linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,${carouselDials.edgeCue.opacity}))`,
+            backdropFilter: `blur(${carouselDials.edgeCue.blurPx}px)`,
+            WebkitBackdropFilter: `blur(${carouselDials.edgeCue.blurPx}px)`,
             maskImage: "linear-gradient(to right, transparent, black 46%, black)",
             WebkitMaskImage: "linear-gradient(to right, transparent, black 46%, black)",
           }}
@@ -265,7 +282,7 @@ export function SongResult({
 
       <div className="relative z-10 w-full flex flex-col items-center justify-between flex-1 h-full">
       {/* Top content */}
-      <div className="flex flex-col items-center w-full mt-auto" style={{ gap: "clamp(16px, 3svh, 32px)" }}>
+      <div className="flex flex-col items-center w-full mt-auto" style={{ gap: `${carouselLayout.carouselTopGapPx}px` }}>
         {/* Description text */}
         <div
           className="flex flex-col items-center w-full"
@@ -278,7 +295,7 @@ export function SongResult({
         {/* The continuous Embla track owns album-art movement; song details do not move with it. */}
         <Carousel
           className="w-full overflow-visible"
-          opts={getFinalCarouselOptions(songs.length)}
+          opts={getFinalCarouselOptions(songs.length, carouselDials)}
           setApi={setCarouselApi}
           tabIndex={0}
         >
@@ -304,31 +321,37 @@ export function SongResult({
                       width: carouselLayout.albumWidth,
                       willChange: "transform, filter",
                     }}
-                    animate={getAlbumSlideMotion(tilt, isActive)}
+                    animate={getAlbumSlideMotion(tilt, isActive, carouselDials)}
                     transition={{
                       type: "spring",
-                      stiffness: 260,
-                      damping: 30,
-                      mass: 0.6,
+                      stiffness: carouselDials.tilt.springStiffness,
+                      damping: carouselDials.tilt.springDamping,
+                      mass: carouselDials.tilt.springMass,
                     }}
                     onTouchStart={isActive ? requestGyroPermission : undefined}
                   >
                     <motion.div
                       className="absolute inset-0 pointer-events-none"
-                      style={{ borderRadius: morph.endRadius }}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1, boxShadow: "0px 8px 24px rgba(19,15,41,0.45)" }}
+                    style={{ borderRadius: carouselDials.appearance.borderRadiusPx }}
+                    initial={{ opacity: 0 }}
+                      animate={{
+                        opacity: 1,
+                        boxShadow: `0px ${carouselDials.appearance.shadowY}px ${carouselDials.appearance.shadowBlurPx}px rgba(19,15,41,${carouselDials.appearance.shadowOpacity})`,
+                      }}
                       transition={{ duration: 1, delay: 1.2, ease: "easeOut" }}
                     />
                     <motion.div
                       className="absolute inset-0 overflow-hidden"
                       layoutId={index === 0 ? "song-album" : undefined}
-                      style={{ borderRadius: morph.endRadius }}
+                      style={{ borderRadius: carouselDials.appearance.borderRadiusPx }}
                       transition={{ layout: { ...morph.spring } }}
                     >
                       <img
                         alt={isActive ? album : ""}
                         className="absolute inset-0 max-w-none object-cover size-full"
+                        style={{
+                          objectPosition: `${carouselDials.image.objectPositionXPercent}% ${carouselDials.image.objectPositionYPercent}%`,
+                        }}
                         src={candidate.album_image ?? imgAlbum}
                       />
                     </motion.div>
@@ -342,14 +365,14 @@ export function SongResult({
         {/* Song details stay anchored while their content blur-crossfades. */}
         <div
           className="relative w-full px-[24px]"
-          style={{ height: "clamp(74px, 10svh, 96px)" }}
+          style={{ height: `${carouselLayout.detailSlotHeightPx}px` }}
           aria-live="polite"
         >
           <AnimatePresence initial={false}>
             <motion.div
               key={activeSongKey}
               className="absolute inset-x-0 top-0 flex flex-col items-center w-full"
-              style={{ gap: "clamp(2px, 0.6svh, 4px)" }}
+              style={{ gap: `${carouselLayout.detailGapPx}px` }}
               initial={detailMotion.initial}
               animate={detailMotion.animate}
               exit={detailMotion.exit}
