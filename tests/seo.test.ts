@@ -31,9 +31,10 @@ test("defines complete canonical and social metadata in the homepage", () => {
   assert.equal(attribute(canonicalTag ?? "", "href"), `${siteUrl}/`);
   assert.equal(metaContent(html, "og:type"), "website");
   assert.equal(metaContent(html, "og:url"), `${siteUrl}/`);
-  assert.equal(metaContent(html, "og:image"), `${siteUrl}/og-image.png`);
+  assert.equal(metaContent(html, "og:image"), `${siteUrl}/og-image-mascot-smooth-50fps.gif`);
+  assert.equal(metaContent(html, "og:image:type"), "image/gif");
   assert.equal(metaContent(html, "twitter:card"), "summary_large_image");
-  assert.equal(metaContent(html, "twitter:image"), `${siteUrl}/og-image.png`);
+  assert.equal(metaContent(html, "twitter:image"), `${siteUrl}/og-image-mascot-smooth-50fps.gif`);
   assert.match(metaContent(html, "description") ?? "", /mood/i);
 });
 
@@ -63,6 +64,7 @@ test("publishes validated app context without inventing ratings or reviews", () 
   assert.equal(app?.name, "Songrec");
   assert.equal(app?.url, `${siteUrl}/`);
   assert.equal(app?.applicationCategory, "MusicApplication");
+  assert.equal(app?.image, `${siteUrl}/og-image-mascot-smooth-50fps.gif`);
   assert.equal("aggregateRating" in (app ?? {}), false);
   assert.equal("review" in (app ?? {}), false);
   assert.equal(existsSync(join(publicRoot, "og-image.png")), true);
@@ -74,4 +76,9 @@ test("ships a 1200 by 630 Open Graph image", () => {
 
   assert.equal(image.readUInt32BE(16), 1200);
   assert.equal(image.readUInt32BE(20), 630);
+
+  const gif = readFileSync(join(publicRoot, "og-image-mascot-smooth-50fps.gif"));
+  assert.equal(gif.subarray(0, 6).toString("ascii"), "GIF89a");
+  assert.equal(gif.readUInt16LE(6), 1200);
+  assert.equal(gif.readUInt16LE(8), 630);
 });
