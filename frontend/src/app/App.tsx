@@ -13,6 +13,7 @@ import {
 } from "./lib/api";
 import { Agentation } from "agentation";
 import { Analytics } from "@vercel/analytics/react";
+import { MeasurementScripts } from "./components/MeasurementScripts";
 import { createRequestGuard } from "./lib/request-guard";
 import { DialRoot } from "dialkit";
 
@@ -401,6 +402,7 @@ export default function App() {
 
       </main>
       <Analytics />
+      <MeasurementScripts />
     </div>
   );
 }

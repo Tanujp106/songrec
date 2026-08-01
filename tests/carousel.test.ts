@@ -20,11 +20,11 @@ test("keeps the result carousel edge-to-edge while controls retain their inset",
   });
 });
 
-test("lays out the tuned cards with a 4px track gap", () => {
+test("lays out the tuned cards with the compact carousel preset", () => {
   assert.deepEqual(getFinalCarouselLayout(defaultFinalCarouselDials), {
-    albumWidth: "100%",
-    gapPx: 4,
-    slideFlexBasis: "80%",
+    albumWidth: "95%",
+    gapPx: 0,
+    slideFlexBasis: "70%",
     carouselTopGapPx: 24,
     detailSlotHeightPx: 120,
     detailGapPx: 12,
@@ -57,14 +57,15 @@ test("keeps all carousel tuning groups in one serializable default object", () =
     "edgeCue",
     "interaction",
   ]);
-  assert.equal(defaultFinalCarouselDials.geometry.slideWidthPercent, 80);
-  assert.equal(defaultFinalCarouselDials.geometry.coverWidthPercent, 100);
-  assert.equal(defaultFinalCarouselDials.geometry.trackGapPx, 4);
+  assert.equal(defaultFinalCarouselDials.geometry.slideWidthPercent, 70);
+  assert.equal(defaultFinalCarouselDials.geometry.coverWidthPercent, 95);
+  assert.equal(defaultFinalCarouselDials.geometry.trackGapPx, 0);
   assert.equal(defaultFinalCarouselDials.appearance.activeScale, 0.9);
-  assert.equal(defaultFinalCarouselDials.appearance.inactiveScale, 0.7);
+  assert.equal(defaultFinalCarouselDials.appearance.inactiveScale, 0.65);
   assert.equal(defaultFinalCarouselDials.appearance.inactiveOpacity, 0.4);
   assert.equal(defaultFinalCarouselDials.appearance.inactiveBlurPx, 8);
   assert.equal(defaultFinalCarouselDials.appearance.shadowOpacity, 0);
+  assert.equal(defaultFinalCarouselDials.tilt.springMass, 1);
   assert.equal(defaultFinalCarouselDials.track.dragFree, true);
   assert.equal(defaultFinalCarouselDials.track.skipSnaps, true);
   assert.equal(defaultFinalCarouselDials.edgeCue.enabled, false);

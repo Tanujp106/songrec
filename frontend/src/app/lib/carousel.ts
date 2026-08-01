@@ -54,16 +54,16 @@ export interface FinalCarouselDialValues {
 
 export const defaultFinalCarouselDials: FinalCarouselDialValues = {
   geometry: {
-    slideWidthPercent: 80,
-    coverWidthPercent: 100,
-    trackGapPx: 4,
+    slideWidthPercent: 70,
+    coverWidthPercent: 95,
+    trackGapPx: 0,
     carouselTopGapPx: 24,
     detailSlotHeightPx: 120,
     detailGapPx: 12,
   },
   appearance: {
     activeScale: 0.9,
-    inactiveScale: 0.7,
+    inactiveScale: 0.65,
     inactiveOpacity: 0.4,
     inactiveBlurPx: 8,
     borderRadiusPx: 32,
@@ -81,7 +81,7 @@ export const defaultFinalCarouselDials: FinalCarouselDialValues = {
     pointerTiltStrength: 4,
     springStiffness: 260,
     springDamping: 30,
-    springMass: 0.6,
+    springMass: 1,
   },
   track: {
     loop: true,
@@ -104,16 +104,16 @@ export const defaultFinalCarouselDials: FinalCarouselDialValues = {
 
 export const finalCarouselDialConfig = {
   geometry: {
-    slideWidthPercent: [80, 55, 100, 1],
-    coverWidthPercent: [100, 70, 120, 1],
-    trackGapPx: [4, 0, 96, 1],
+    slideWidthPercent: [70, 55, 100, 1],
+    coverWidthPercent: [95, 70, 120, 1],
+    trackGapPx: [0, 0, 96, 1],
     carouselTopGapPx: [24, 0, 64, 1],
     detailSlotHeightPx: [120, 48, 160, 1],
     detailGapPx: [12, 0, 48, 1],
   },
   appearance: {
     activeScale: [0.9, 0.7, 1.1, 0.01],
-    inactiveScale: [0.7, 0.5, 1, 0.01],
+    inactiveScale: [0.65, 0.5, 1, 0.01],
     inactiveOpacity: [0.4, 0, 1, 0.01],
     inactiveBlurPx: [8, 0, 20, 1],
     borderRadiusPx: [32, 0, 96, 1],
@@ -131,7 +131,7 @@ export const finalCarouselDialConfig = {
     pointerTiltStrength: [4, 0, 16, 0.5],
     springStiffness: [260, 40, 600, 1],
     springDamping: [30, 5, 80, 1],
-    springMass: [0.6, 0.1, 2, 0.05],
+    springMass: [1, 0.1, 2, 0.05],
   },
   track: {
     loop: true,

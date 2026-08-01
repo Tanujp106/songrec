@@ -34,6 +34,8 @@ Prerequisites: Node.js 18.17+, Spotify Developer credentials, and a Supabase pro
 
 2. Create `.env.local` in the repository root using `.env.local.example`. Set the server-only `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` values. The Spotify OAuth variables are only required for the playlist-import flow.
 
+   For frontend-only values, copy `frontend/.env.example` to `frontend/.env.local`. Keep `VITE_API_BASE_URL` pointed at the API server and leave the analytics IDs blank until their production properties exist.
+
 3. Start the frontend and API server together:
 
    ```bash
@@ -60,7 +62,12 @@ The canonical site is [songrec.tanujpatel.design](https://songrec.tanujpatel.des
 - `/sitemap.xml` — the public URL sitemap.
 - `/llms.txt` — concise product facts and public page links for AI systems.
 
-Vercel Analytics is mounted in the frontend. Google Analytics and Microsoft Clarity remain pending.
+Vercel Analytics is mounted in the frontend. Google Analytics 4 and Microsoft Clarity are wired as production-only, opt-in integrations:
+
+- `VITE_GA_MEASUREMENT_ID` — the GA4 tag ID, such as `G-XXXXXXX`.
+- `VITE_CLARITY_PROJECT_ID` — the Clarity project ID.
+
+When either value is blank, that integration does not load. Set the values in the frontend's Vercel environment before a production build; they are intentionally not committed to the repository. After deployment, verify GA4 with Tag Assistant and Clarity from its Setup page.
 
 ## Deployment
 

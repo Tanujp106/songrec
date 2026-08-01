@@ -9,7 +9,7 @@ test("maps active and inactive album appearance while carousel position changes"
   const inactive = getAlbumSlideMotion({ rotateX: 3, rotateY: -2 }, false, defaultFinalCarouselDials);
 
   assert.deepEqual(active, { rotateX: 3, rotateY: -2, scale: 0.9, opacity: 1, filter: "blur(0px)" });
-  assert.deepEqual(inactive, { rotateX: 0, rotateY: 0, scale: 0.7, opacity: 0.4, filter: "blur(8px)" });
+  assert.deepEqual(inactive, { rotateX: 0, rotateY: 0, scale: 0.65, opacity: 0.4, filter: "blur(8px)" });
 });
 
 test("maps tuned inactive cover appearance into Motion values", () => {
