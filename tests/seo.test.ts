@@ -77,9 +77,9 @@ test("publishes factual About-page answers and matching FAQ schema", () => {
   assert.deepEqual(questions?.map((question) => question.acceptedAnswer && (question.acceptedAnswer as Record<string, unknown>).text), expectedAnswers);
   assert.equal(/aggregateRating|review|testimonial/i.test(JSON.stringify(faqPage)), false);
   assert.match(llms, /^## Direct answers$/m);
-  assert.match(llms, /^## What is Songrec\?$/m);
-  assert.match(llms, /^## How does Songrec work\?$/m);
-  assert.match(llms, /^## Where do recommendations come from\?$/m);
+  assert.match(llms, /^### What is Songrec\?$/m);
+  assert.match(llms, /^### How does Songrec work\?$/m);
+  assert.match(llms, /^### Where do recommendations come from\?$/m);
   assert.match(llms, /^## Public pages$/m);
   assert.match(llms, /^## Scope notes$/m);
 });
