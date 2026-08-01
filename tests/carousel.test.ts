@@ -20,25 +20,31 @@ test("keeps the result carousel edge-to-edge while controls retain their inset",
   });
 });
 
-test("lays out full-width cards with a 40px gap", () => {
+test("lays out the tuned cards with a 4px track gap", () => {
   assert.deepEqual(getFinalCarouselLayout(defaultFinalCarouselDials), {
     albumWidth: "100%",
-    gapPx: 40,
-    slideFlexBasis: "78%",
-    carouselTopGapPx: 16,
-    detailSlotHeightPx: 96,
-    detailGapPx: 16,
+    gapPx: 4,
+    slideFlexBasis: "80%",
+    carouselTopGapPx: 24,
+    detailSlotHeightPx: 120,
+    detailGapPx: 12,
   });
 });
 
-test("uses a snapped looping track for multiple final-screen songs", () => {
+test("centers the active cover with the configured free-drag track", () => {
   assert.deepEqual(getFinalCarouselOptions(5, defaultFinalCarouselDials), {
-    align: "start",
+    align: "center",
     containScroll: false,
-    dragFree: false,
+    dragThreshold: 48,
+    dragFree: true,
     loop: true,
-    skipSnaps: false,
+    skipSnaps: true,
   });
+});
+
+test("reduces drag friction after the first committed swipe", () => {
+  assert.equal(getFinalCarouselOptions(5, defaultFinalCarouselDials, false).dragThreshold, 48);
+  assert.equal(getFinalCarouselOptions(5, defaultFinalCarouselDials, true).dragThreshold, 12);
 });
 
 test("keeps all carousel tuning groups in one serializable default object", () => {
@@ -49,11 +55,22 @@ test("keeps all carousel tuning groups in one serializable default object", () =
     "tilt",
     "track",
     "edgeCue",
+    "interaction",
   ]);
-  assert.equal(defaultFinalCarouselDials.geometry.slideWidthPercent, 78);
+  assert.equal(defaultFinalCarouselDials.geometry.slideWidthPercent, 80);
   assert.equal(defaultFinalCarouselDials.geometry.coverWidthPercent, 100);
-  assert.equal(defaultFinalCarouselDials.appearance.inactiveBlurPx, 0);
-  assert.equal(defaultFinalCarouselDials.edgeCue.enabled, true);
+  assert.equal(defaultFinalCarouselDials.geometry.trackGapPx, 4);
+  assert.equal(defaultFinalCarouselDials.appearance.activeScale, 0.9);
+  assert.equal(defaultFinalCarouselDials.appearance.inactiveScale, 0.7);
+  assert.equal(defaultFinalCarouselDials.appearance.inactiveOpacity, 0.4);
+  assert.equal(defaultFinalCarouselDials.appearance.inactiveBlurPx, 8);
+  assert.equal(defaultFinalCarouselDials.appearance.shadowOpacity, 0);
+  assert.equal(defaultFinalCarouselDials.track.dragFree, true);
+  assert.equal(defaultFinalCarouselDials.track.skipSnaps, true);
+  assert.equal(defaultFinalCarouselDials.edgeCue.enabled, false);
+  assert.equal(defaultFinalCarouselDials.interaction.centerActive, true);
+  assert.equal(defaultFinalCarouselDials.interaction.firstSwipeDragThresholdPx, 48);
+  assert.equal(defaultFinalCarouselDials.interaction.normalDragThresholdPx, 12);
 });
 
 test("disables looping when the final screen has one song", () => {

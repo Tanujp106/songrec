@@ -45,26 +45,31 @@ export interface FinalCarouselDialValues {
     blurPx: number;
     opacity: number;
   };
+  interaction: {
+    centerActive: boolean;
+    firstSwipeDragThresholdPx: number;
+    normalDragThresholdPx: number;
+  };
 }
 
 export const defaultFinalCarouselDials: FinalCarouselDialValues = {
   geometry: {
-    slideWidthPercent: 78,
+    slideWidthPercent: 80,
     coverWidthPercent: 100,
-    trackGapPx: 40,
-    carouselTopGapPx: 16,
-    detailSlotHeightPx: 96,
-    detailGapPx: 16,
+    trackGapPx: 4,
+    carouselTopGapPx: 24,
+    detailSlotHeightPx: 120,
+    detailGapPx: 12,
   },
   appearance: {
-    activeScale: 1,
-    inactiveScale: 0.84,
-    inactiveOpacity: 0.82,
-    inactiveBlurPx: 0,
+    activeScale: 0.9,
+    inactiveScale: 0.7,
+    inactiveOpacity: 0.4,
+    inactiveBlurPx: 8,
     borderRadiusPx: 32,
-    shadowY: 8,
-    shadowBlurPx: 24,
-    shadowOpacity: 0.45,
+    shadowY: 0,
+    shadowBlurPx: 0,
+    shadowOpacity: 0,
   },
   image: {
     objectPositionXPercent: 50,
@@ -80,36 +85,41 @@ export const defaultFinalCarouselDials: FinalCarouselDialValues = {
   },
   track: {
     loop: true,
-    dragFree: false,
-    skipSnaps: false,
+    dragFree: true,
+    skipSnaps: true,
     alignStart: true,
   },
   edgeCue: {
-    enabled: true,
+    enabled: false,
     widthPx: 52,
     blurPx: 14,
     opacity: 0.14,
+  },
+  interaction: {
+    centerActive: true,
+    firstSwipeDragThresholdPx: 48,
+    normalDragThresholdPx: 12,
   },
 };
 
 export const finalCarouselDialConfig = {
   geometry: {
-    slideWidthPercent: [78, 55, 100, 1],
+    slideWidthPercent: [80, 55, 100, 1],
     coverWidthPercent: [100, 70, 120, 1],
-    trackGapPx: [40, 0, 96, 1],
-    carouselTopGapPx: [16, 0, 64, 1],
-    detailSlotHeightPx: [96, 48, 160, 1],
-    detailGapPx: [16, 0, 48, 1],
+    trackGapPx: [4, 0, 96, 1],
+    carouselTopGapPx: [24, 0, 64, 1],
+    detailSlotHeightPx: [120, 48, 160, 1],
+    detailGapPx: [12, 0, 48, 1],
   },
   appearance: {
-    activeScale: [1, 0.7, 1.1, 0.01],
-    inactiveScale: [0.84, 0.5, 1, 0.01],
-    inactiveOpacity: [0.82, 0, 1, 0.01],
-    inactiveBlurPx: [0, 0, 20, 1],
+    activeScale: [0.9, 0.7, 1.1, 0.01],
+    inactiveScale: [0.7, 0.5, 1, 0.01],
+    inactiveOpacity: [0.4, 0, 1, 0.01],
+    inactiveBlurPx: [8, 0, 20, 1],
     borderRadiusPx: [32, 0, 96, 1],
-    shadowY: [8, 0, 32, 1],
-    shadowBlurPx: [24, 0, 64, 1],
-    shadowOpacity: [0.45, 0, 1, 0.01],
+    shadowY: [0, 0, 32, 1],
+    shadowBlurPx: [0, 0, 64, 1],
+    shadowOpacity: [0, 0, 1, 0.01],
   },
   image: {
     objectPositionXPercent: [50, 0, 100, 1],
@@ -125,15 +135,20 @@ export const finalCarouselDialConfig = {
   },
   track: {
     loop: true,
-    dragFree: false,
-    skipSnaps: false,
+    dragFree: true,
+    skipSnaps: true,
     alignStart: true,
   },
   edgeCue: {
-    enabled: true,
+    enabled: false,
     widthPx: [52, 0, 120, 1],
     blurPx: [14, 0, 40, 1],
     opacity: [0.14, 0, 1, 0.01],
+  },
+  interaction: {
+    centerActive: true,
+    firstSwipeDragThresholdPx: [48, 10, 80, 1],
+    normalDragThresholdPx: [12, 1, 40, 1],
   },
 } satisfies DialConfig;
 
@@ -159,10 +174,20 @@ export function getFinalCarouselLayout(dials: FinalCarouselDialValues = defaultF
 export function getFinalCarouselOptions(
   songCount: number,
   dials: FinalCarouselDialValues = defaultFinalCarouselDials,
+  hasInteracted = false,
 ) {
   return {
-    align: dials.track.alignStart ? ("start" as const) : ("center" as const),
+    // Centering is the default final-screen composition. Keep alignStart as
+    // an escape hatch for experiments when centerActive is turned off.
+    align: dials.interaction.centerActive
+      ? ("center" as const)
+      : dials.track.alignStart
+        ? ("start" as const)
+        : ("center" as const),
     containScroll: false as const,
+    dragThreshold: hasInteracted
+      ? dials.interaction.normalDragThresholdPx
+      : dials.interaction.firstSwipeDragThresholdPx,
     dragFree: dials.track.dragFree,
     loop: songCount > 1 && dials.track.loop,
     skipSnaps: dials.track.skipSnaps,

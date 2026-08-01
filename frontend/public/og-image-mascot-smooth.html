@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.cdnfonts.com/css/switzer" rel="stylesheet" />
+    <style>
+      * { box-sizing: border-box; }
+      html, body { height: 630px; margin: 0; overflow: hidden; width: 1200px; }
+      body { align-items: center; background: #5A54F2; color: white; display: flex; }
+      .card {
+        align-items: center;
+        display: grid;
+        grid-template-columns: 42% 58%;
+        height: 100%;
+        padding: 44px 56px;
+        width: 100%;
+      }
+      .mascot-wrap { align-items: center; display: flex; justify-content: center; }
+      .mascot {
+        align-items: center;
+        background: #EBE9FF;
+        border: 10px solid #fff;
+        border-radius: 50%;
+        box-shadow: 0 18px 36px rgba(42, 42, 42, 0.25);
+        display: flex;
+        height: 344px;
+        justify-content: center;
+        overflow: hidden;
+        width: 344px;
+      }
+      .copy { padding-left: 52px; }
+      h1 {
+        font-family: "Spectral", serif;
+        font-size: 96px;
+        font-weight: 400;
+        letter-spacing: -0.06em;
+        line-height: 0.92;
+        margin: 0 0 30px;
+      }
+      p {
+        font-family: "Spectral", serif;
+        font-size: 34px;
+        font-weight: 400;
+        letter-spacing: 0.025em;
+        line-height: 1.2;
+        margin: 0;
+        max-width: none;
+        opacity: 0.9;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="mascot-wrap" aria-label="Songrec mascot">
+        <div class="mascot">
+          <svg aria-hidden="true" height="100%" viewBox="0 0 200 200" width="100%">
+            <path id="left-eye" fill="none" stroke="#2A2A2A" stroke-linecap="round" stroke-width="9" />
+            <path id="right-eye" fill="none" stroke="#2A2A2A" stroke-linecap="round" stroke-width="9" />
+            <path id="mouth" fill="none" stroke="#2A2A2A" stroke-linecap="round" stroke-width="9" />
+          </svg>
+        </div>
+      </div>
+      <div class="copy">
+        <h1>Songrec</h1>
+        <p>handpicked songs for every mood</p>
+      </div>
+    </main>
+    <script>
+      const expressions = [
+        ["M 60 82 Q 75 78 90 86", "M 110 86 Q 125 78 140 82", "M 75 128 Q 100 133 125 126"],
+        ["M 60 75 Q 75 55 90 75", "M 110 75 Q 125 55 140 75", "M 65 110 Q 100 160 135 110"],
+        ["M 60 90 Q 75 75 90 90", "M 110 90 Q 125 75 140 90", "M 70 135 Q 100 115 130 135"],
+        ["M 60 80 Q 75 55 90 80", "M 110 80 Q 125 55 140 80", "M 85 125 Q 100 140 115 125"],
+      ].map((expression) => expression.map((path) => path.match(/-?\d+(?:\.\d+)?/g).map(Number)));
+
+      const time = Number(new URLSearchParams(location.search).get("time") ?? 0) % 4000;
+      const segment = Math.floor(time / 1000);
+      const segmentProgress = (time % 1000) / 1000;
+      const rawMorphProgress = segmentProgress <= 0.4 ? 0 : (segmentProgress - 0.4) / 0.6;
+      const morphProgress = 0.5 - Math.cos(Math.min(rawMorphProgress, 1) * Math.PI) / 2;
+      const from = expressions[segment];
+      const to = expressions[(segment + 1) % expressions.length];
+
+      function pathFromNumbers(values) {
+        return `M ${values[0]} ${values[1]} Q ${values[2]} ${values[3]} ${values[4]} ${values[5]}`;
+      }
+
+      ["left-eye", "right-eye", "mouth"].forEach((id, index) => {
+        const values = from[index].map((value, coordinate) => value + (to[index][coordinate] - value) * morphProgress);
+        document.getElementById(id).setAttribute("d", pathFromNumbers(values));
+      });
+    </script>
+  </body>
+</html>

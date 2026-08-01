@@ -193,10 +193,11 @@ export function SongResult({
   morph,
 }: SongResultProps) {
   const carouselDials = useDialKit("SONGREC final carousel", finalCarouselDialConfig, {
-    id: "songrec-final-carousel",
-    persist: { key: "songrec:final-carousel", presets: true },
+    id: "songrec-final-carousel-v3",
+    persist: { key: "songrec:final-carousel:v3", presets: true },
   });
   const [activeIndex, setActiveIndex] = useState(0);
+  const [hasExploredSongs, setHasExploredSongs] = useState(false);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const song = songs[activeIndex] ?? null;
   const popLabel = POPULARITY_LABELS[popularity] || "popular";
@@ -209,9 +210,13 @@ export function SongResult({
   const detailMotion = getSongDetailMotion(shouldReduceMotion);
   const carouselLayout = getFinalCarouselLayout(carouselDials);
   const resultScreenLayout = getResultScreenLayout();
+  const description = hasExploredSongs
+    ? `More ${mood} songs you might like`
+    : `Here's a perfect ${mood} song for you`;
 
   useEffect(() => {
     setActiveIndex(0);
+    setHasExploredSongs(false);
     carouselApi?.scrollTo(0, true);
   }, [carouselApi, songs]);
 
@@ -219,15 +224,17 @@ export function SongResult({
     if (!carouselApi) return;
 
     const syncActiveSong = () => {
-      setActiveIndex(getCarouselIndex(carouselApi.selectedScrollSnap(), songs.length));
+      const nextIndex = getCarouselIndex(carouselApi.selectedScrollSnap(), songs.length);
+      setActiveIndex(nextIndex);
+      if (nextIndex !== 0) setHasExploredSongs(true);
     };
 
     syncActiveSong();
-    carouselApi.on("settle", syncActiveSong);
+    carouselApi.on("select", syncActiveSong);
     carouselApi.on("reInit", syncActiveSong);
 
     return () => {
-      carouselApi.off("settle", syncActiveSong);
+      carouselApi.off("select", syncActiveSong);
       carouselApi.off("reInit", syncActiveSong);
     };
   }, [carouselApi, songs.length]);
@@ -287,15 +294,25 @@ export function SongResult({
         <div
           className="flex flex-col items-center w-full"
         >
-          <p className="font-['Spectral',serif] text-center text-white w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
-            {`Here's a perfect ${mood} song for you`}
-          </p>
+          <AnimatePresence initial={false} mode="wait">
+            <motion.p
+              key={hasExploredSongs ? "more-songs" : "perfect-song"}
+              className="font-['Spectral',serif] text-center text-white w-full"
+              style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              {description}
+            </motion.p>
+          </AnimatePresence>
         </div>
 
         {/* The continuous Embla track owns album-art movement; song details do not move with it. */}
         <Carousel
           className="w-full overflow-visible"
-          opts={getFinalCarouselOptions(songs.length, carouselDials)}
+          opts={getFinalCarouselOptions(songs.length, carouselDials, hasExploredSongs)}
           setApi={setCarouselApi}
           tabIndex={0}
         >
@@ -313,6 +330,7 @@ export function SongResult({
                   key={candidateKey}
                   className="basis-full pl-0 justify-start"
                   style={{ flexBasis: carouselLayout.slideFlexBasis }}
+                  onClick={!isActive ? () => carouselApi?.scrollTo(index) : undefined}
                 >
                   <motion.div
                     ref={isActive ? albumContainerRef : undefined}

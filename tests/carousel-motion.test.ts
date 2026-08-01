@@ -4,12 +4,12 @@ import test from "node:test";
 import { getAlbumSlideMotion } from "../frontend/src/app/lib/carousel-motion";
 import { defaultFinalCarouselDials } from "../frontend/src/app/lib/carousel";
 
-test("keeps album covers sharp while carousel position changes", () => {
+test("maps active and inactive album appearance while carousel position changes", () => {
   const active = getAlbumSlideMotion({ rotateX: 3, rotateY: -2 }, true, defaultFinalCarouselDials);
   const inactive = getAlbumSlideMotion({ rotateX: 3, rotateY: -2 }, false, defaultFinalCarouselDials);
 
-  assert.deepEqual(active, { rotateX: 3, rotateY: -2, scale: 1, opacity: 1, filter: "blur(0px)" });
-  assert.deepEqual(inactive, { rotateX: 0, rotateY: 0, scale: 0.84, opacity: 0.82, filter: "blur(0px)" });
+  assert.deepEqual(active, { rotateX: 3, rotateY: -2, scale: 0.9, opacity: 1, filter: "blur(0px)" });
+  assert.deepEqual(inactive, { rotateX: 0, rotateY: 0, scale: 0.7, opacity: 0.4, filter: "blur(8px)" });
 });
 
 test("maps tuned inactive cover appearance into Motion values", () => {
