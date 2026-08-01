@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  defaultFinalCarouselDials,
   getCarouselIndex,
   getFinalCarouselLayout,
   getResultScreenLayout,
@@ -20,21 +21,39 @@ test("keeps the result carousel edge-to-edge while controls retain their inset",
 });
 
 test("lays out full-width cards with a 40px gap", () => {
-  assert.deepEqual(getFinalCarouselLayout(), {
+  assert.deepEqual(getFinalCarouselLayout(defaultFinalCarouselDials), {
     albumWidth: "100%",
     gapPx: 40,
-    slideFlexBasis: "100%",
+    slideFlexBasis: "78%",
+    carouselTopGapPx: 16,
+    detailSlotHeightPx: 96,
+    detailGapPx: 16,
   });
 });
 
 test("uses a snapped looping track for multiple final-screen songs", () => {
-  assert.deepEqual(getFinalCarouselOptions(5), {
+  assert.deepEqual(getFinalCarouselOptions(5, defaultFinalCarouselDials), {
     align: "start",
     containScroll: false,
     dragFree: false,
     loop: true,
     skipSnaps: false,
   });
+});
+
+test("keeps all carousel tuning groups in one serializable default object", () => {
+  assert.deepEqual(Object.keys(defaultFinalCarouselDials), [
+    "geometry",
+    "appearance",
+    "image",
+    "tilt",
+    "track",
+    "edgeCue",
+  ]);
+  assert.equal(defaultFinalCarouselDials.geometry.slideWidthPercent, 78);
+  assert.equal(defaultFinalCarouselDials.geometry.coverWidthPercent, 100);
+  assert.equal(defaultFinalCarouselDials.appearance.inactiveBlurPx, 0);
+  assert.equal(defaultFinalCarouselDials.edgeCue.enabled, true);
 });
 
 test("disables looping when the final screen has one song", () => {
