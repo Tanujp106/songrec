@@ -23,6 +23,48 @@
     <meta name="twitter:image" content="https://songrec.tanujpatel.design/og-image-mascot-smooth-50fps.gif" />
     <meta name="twitter:image:alt" content="Songrec mascot with the words handpicked songs for every mood" />
     <title>About Songrec | Mood-Based Music Recommendations</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "name": "About Songrec",
+            "url": "https://songrec.tanujpatel.design/about/",
+            "description": "Learn how Songrec gives mood-based music recommendations from a handpicked Spotify collection."
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is Songrec?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Songrec is a web app that turns a mood choice and a popularity preference into a music recommendation from a handpicked Spotify collection."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does Songrec recommend music?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Choose a mood, move the popularity slider, and ask Songrec for a recommendation. Songrec uses those two inputs to select matching tracks."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Where do recommendations come from?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Recommendations come from a handpicked Spotify collection organized around Songrec's mood and popularity choices."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
     <style>
       :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #0e0b2c; color: #f7f4ff; }
       body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 85% 10%, #5a54f2 0, transparent 37%), #0e0b2c; }
@@ -41,21 +83,17 @@
 
       <section>
         <h2>What is Songrec?</h2>
-        <p>Songrec is a web app for quick music discovery. It turns a mood choice and a popularity preference into a single track recommendation.</p>
+        <p>Songrec is a web app that turns a mood choice and a popularity preference into a music recommendation from a handpicked Spotify collection.</p>
       </section>
 
       <section>
         <h2>How does Songrec recommend music?</h2>
-        <ol>
-          <li>Choose a mood that matches your current vibe.</li>
-          <li>Set the popularity slider from underrated to popular.</li>
-          <li>Songrec selects a matching track from its handpicked Spotify collection.</li>
-        </ol>
+        <p>Choose a mood, move the popularity slider, and ask Songrec for a recommendation. Songrec uses those two inputs to select matching tracks.</p>
       </section>
 
       <section class="card">
         <h2>Where do recommendations come from?</h2>
-        <p>Recommendations come from a handpicked Spotify collection that is organized for Songrec's mood and popularity choices. A recommendation links out to Spotify when a track URL is available.</p>
+        <p>Recommendations come from a handpicked Spotify collection organized around Songrec's mood and popularity choices.</p>
       </section>
     </main>
   </body>

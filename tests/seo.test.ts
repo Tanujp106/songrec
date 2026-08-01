@@ -51,6 +51,39 @@ test("publishes crawl controls and a factual public context page", () => {
   assert.match(about, /How does Songrec recommend music\?/);
 });
 
+test("publishes factual About-page answers and matching FAQ schema", () => {
+  const about = readPublicFile("about/index.html");
+  const llms = readPublicFile("llms.txt");
+  const expectedQuestions = [
+    "What is Songrec?",
+    "How does Songrec recommend music?",
+    "Where do recommendations come from?",
+  ];
+  const expectedAnswers = [
+    "Songrec is a web app that turns a mood choice and a popularity preference into a music recommendation from a handpicked Spotify collection.",
+    "Choose a mood, move the popularity slider, and ask Songrec for a recommendation. Songrec uses those two inputs to select matching tracks.",
+    "Recommendations come from a handpicked Spotify collection organized around Songrec's mood and popularity choices.",
+  ];
+  const jsonLdBlocks = [...about.matchAll(/<script type=["']application\/ld\+json["']>([\s\S]*?)<\/script>/gi)]
+    .map((match) => JSON.parse(match[1]));
+  const graph = jsonLdBlocks.flatMap((block) => block["@graph"] ?? []);
+  const webPage = graph.find((entry) => entry["@type"] === "WebPage");
+  const faqPage = graph.find((entry) => entry["@type"] === "FAQPage");
+  const questions = faqPage?.mainEntity as Array<Record<string, unknown>> | undefined;
+
+  for (const answer of expectedAnswers) assert.match(about, new RegExp(answer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal(webPage?.url, `${siteUrl}/about/`);
+  assert.deepEqual(questions?.map((question) => question.name), expectedQuestions);
+  assert.deepEqual(questions?.map((question) => question.acceptedAnswer && (question.acceptedAnswer as Record<string, unknown>).text), expectedAnswers);
+  assert.equal(/aggregateRating|review|testimonial/i.test(JSON.stringify(faqPage)), false);
+  assert.match(llms, /^## Direct answers$/m);
+  assert.match(llms, /^## What is Songrec\?$/m);
+  assert.match(llms, /^## How does Songrec work\?$/m);
+  assert.match(llms, /^## Where do recommendations come from\?$/m);
+  assert.match(llms, /^## Public pages$/m);
+  assert.match(llms, /^## Scope notes$/m);
+});
+
 test("publishes validated app context without inventing ratings or reviews", () => {
   const html = readFrontendFile("index.html");
   const jsonLd = html.match(/<script type=["']application\/ld\+json["']>([\s\S]*?)<\/script>/i)?.[1];
