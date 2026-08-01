@@ -1,0 +1,17 @@
+{
+  "name": "Songrec",
+  "short_name": "Songrec",
+  "description": "Mood-based music recommendations from a handpicked Spotify collection.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17105a",
+  "theme_color": "#5a54f2",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
