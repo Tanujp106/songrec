@@ -62,12 +62,11 @@ The canonical site is [songrec.tanujpatel.design](https://songrec.tanujpatel.des
 - `/sitemap.xml` — the public URL sitemap.
 - `/llms.txt` — concise product facts and public page links for AI systems.
 
-Vercel Analytics is mounted in the frontend. Google Analytics 4 and Microsoft Clarity are wired as production-only, opt-in integrations:
+Vercel Analytics is mounted in the frontend. Google Analytics 4 is installed as the standard static Google tag on the homepage and About page. Microsoft Clarity remains a production-only, opt-in integration:
 
-- `VITE_GA_MEASUREMENT_ID` — the GA4 tag ID, such as `G-XXXXXXX`.
 - `VITE_CLARITY_PROJECT_ID` — the Clarity project ID.
 
-When either value is blank, that integration does not load. Set the values in the frontend's Vercel environment before a production build; they are intentionally not committed to the repository. After deployment, verify GA4 with Tag Assistant and Clarity from its Setup page.
+The GA4 Measurement ID is public by design and is included in both page `<head>` blocks so Google’s installation checker and browser tools can detect it before the React app mounts. Set the Clarity project ID in the frontend's Vercel environment before a production build; it is intentionally not committed to the repository. After deployment, verify GA4 with Tag Assistant and Clarity from its Setup page.
 
 ## Deployment
 

@@ -38,6 +38,16 @@ test("defines complete canonical and social metadata in the homepage", () => {
   assert.match(metaContent(html, "description") ?? "", /mood/i);
 });
 
+test("publishes one static Google tag on each public page", () => {
+  const pages = [readFrontendFile("index.html"), readPublicFile("about/index.html")];
+
+  for (const html of pages) {
+    assert.equal((html.match(/googletagmanager\.com\/gtag\/js/g) ?? []).length, 1);
+    assert.match(html, /googletagmanager\.com\/gtag\/js\?id=G-1KRY39MT4W/);
+    assert.match(html, /gtag\(['"]config['"], ['"]G-1KRY39MT4W['"]\)/);
+  }
+});
+
 test("publishes crawl controls and a factual public context page", () => {
   const robots = readPublicFile("robots.txt");
   const sitemap = readPublicFile("sitemap.xml");
