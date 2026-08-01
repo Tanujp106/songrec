@@ -2,15 +2,15 @@
 
 ## Direct answers
 
-## What is Songrec?
+### What is Songrec?
 
 Songrec is a web app that turns a mood choice and a popularity preference into a music recommendation from a handpicked Spotify collection.
 
-## How does Songrec work?
+### How does Songrec work?
 
 Choose a mood, move the popularity slider, and ask Songrec for a recommendation. Songrec uses those two inputs to select matching tracks.
 
-## Where do recommendations come from?
+### Where do recommendations come from?
 
 Recommendations come from a handpicked Spotify collection organized around Songrec's mood and popularity choices.
 

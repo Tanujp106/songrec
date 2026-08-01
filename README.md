@@ -23,7 +23,7 @@ React + Vite frontend (3000) → Next.js API server (3001) → Spotify Web API a
 
 ## Setup
 
-Prerequisites: Node.js 18+, Spotify Developer credentials, and a Supabase project.
+Prerequisites: Node.js 18.17+, Spotify Developer credentials, and a Supabase project.
 
 1. Install the root and frontend dependencies:
 
