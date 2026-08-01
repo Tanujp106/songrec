@@ -14,6 +14,7 @@ import {
 import { Agentation } from "agentation";
 import { Analytics } from "@vercel/analytics/react";
 import { createRequestGuard } from "./lib/request-guard";
+import { DialRoot } from "dialkit";
 
 const DEFAULT_FROM = "#5A54F2";
 
@@ -50,9 +51,8 @@ function mixHex(a: string, b: string, ratio: number): string {
   return `#${toHex(aR + (bR - aR) * t)}${toHex(aG + (bG - aG) * t)}${toHex(aB + (bB - aB) * t)}`;
 }
 
-// DialKit is optional and is not part of the checked-in frontend dependencies.
 function DevTools() {
-  return null;
+  return import.meta.env.DEV ? <DialRoot /> : null;
 }
 
 export default function App() {
