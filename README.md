@@ -1,67 +1,76 @@
-# songrec
+# Songrec
 
-Mood-based music recommendations from a handpicked Spotify collection. Pick a vibe, tune the popularity slider, get a track.
+Handpicked songs for every mood. Choose a vibe, tune how popular you want the pick to be, and get a track from Songrec's curated Spotify collection.
 
-## Features
+## How it works
 
-- Pick a mood and adjust a popularity slider to get a song recommendation
-- Save recommended tracks directly to your Spotify library
+1. Choose one of Songrec's eight moods: party, feel-good, soft, indie, retro, sad, love, or hiphop.
+2. Adjust the popularity slider to control how familiar or unexpected the recommendation should be.
+3. Get up to five recommendations from the curated collection.
+4. Open a recommendation on Spotify when a Spotify link is available.
+5. Start over whenever you want to choose another mood or popularity level.
 
-## Stack
+## Architecture
 
-**Frontend** — React 18, Vite, TypeScript, Tailwind CSS, Framer Motion  
-**Backend** — Next.js 14 API routes, Spotify Web API, Supabase
+```text
+React + Vite frontend (3000) → Next.js API server (3001) → Spotify Web API and Supabase
+```
+
+- `frontend/` contains the React + Vite frontend and its public SEO files.
+- `src/` contains the Next.js API server and server-side application code.
+- `VITE_API_BASE_URL` configures the frontend API base URL. For local development, the frontend uses the API server at `http://localhost:3001`.
+- Spotify and Supabase credentials are server-only values. Keep them in the root `.env.local` and do not expose them through frontend variables.
 
 ## Setup
 
-**Prerequisites:** Node.js 18+, Spotify Developer credentials, Supabase project
+Prerequisites: Node.js 18+, Spotify Developer credentials, and a Supabase project.
 
-1. Clone and install
+1. Install the root and frontend dependencies:
 
    ```bash
-   git clone https://github.com/Tanujp106/songrec.git
-   cd songrec
    npm install
    cd frontend && npm install && cd ..
    ```
 
-2. Create `.env.local` in the root:
+2. Create `.env.local` in the repository root using `.env.local.example`. Set the server-only `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` values. The Spotify OAuth variables are only required for the playlist-import flow.
 
-   ```env
-   SPOTIFY_CLIENT_ID=
-   SPOTIFY_CLIENT_SECRET=
-   SUPABASE_URL=
-   SUPABASE_SECRET_KEY=
-   # Optional: required only for the playlist-import OAuth flow.
-   SPOTIFY_REDIRECT_URI=http://127.0.0.1:3001/api/spotify/callback
-   ```
-
-3. Run both servers:
+3. Start the frontend and API server together:
 
    ```bash
-   # Starts the frontend at http://localhost:3000 and API at http://localhost:3001
    npm run dev
    ```
 
-4. Open `http://localhost:3000`
+   The frontend runs at `http://localhost:3000` and the API server runs at `http://localhost:3001`.
 
-## Spotify Setup
+## Commands
 
-1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Add `http://127.0.0.1:3001/api/spotify/callback` to Redirect URIs
-3. Copy Client ID and Secret into `.env.local`
+```bash
+npm run dev                 # Start the frontend and API server
+npm test                    # Run the test suite
+npm run typecheck          # Type-check the API and frontend
+cd frontend && npm run build # Build the frontend
+```
+
+## SEO, AEO, and GEO
+
+The canonical site is [songrec.tanujpatel.design](https://songrec.tanujpatel.design/). Public discovery and reference files are available at:
+
+- `/about/` — factual product and recommendation overview.
+- `/robots.txt` — crawler guidance and the sitemap location.
+- `/sitemap.xml` — the public URL sitemap.
+- `/llms.txt` — concise product facts and public page links for AI systems.
+
+Vercel Analytics is mounted in the frontend. Google Analytics and Microsoft Clarity remain pending.
 
 ## Deployment
 
-```bash
-# Frontend
-cd frontend && npm run build && vercel --prod
+Build the frontend with:
 
-# Backend
-vercel --prod
+```bash
+cd frontend && npm run build
 ```
 
-Update `frontend/.env.production` with the deployed API URL.
+Deploy the frontend and API with Vercel after configuring the production environment variables. Set `VITE_API_BASE_URL` to the deployed API URL for the frontend deployment.
 
 ---
 
