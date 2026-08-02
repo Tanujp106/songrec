@@ -404,7 +404,7 @@ export function getDiscoveryStackCycleState(
     return {
       ...backLayout,
       opacity: 1,
-      zIndex: Math.max(1, cardCount + 1),
+      zIndex: 1,
     };
   }
 

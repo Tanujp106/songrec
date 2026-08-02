@@ -171,7 +171,7 @@ test("threads the front card around the swipe side before settling behind the st
   assert.deepEqual(getDiscoveryStackCycleState("previous", "settle", backLayout, 4), {
     ...backLayout,
     opacity: 1,
-    zIndex: 5,
+    zIndex: 1,
   });
 });
 
