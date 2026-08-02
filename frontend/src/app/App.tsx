@@ -278,7 +278,7 @@ export default function App() {
 
         {/* Screen content with crossfade transitions */}
         <LayoutGroup>
-          <div className="relative flex-1 w-full">
+          <div className="relative flex-1 w-full min-h-0">
             <AnimatePresence mode="sync">
               {screen === "mood" && (
                 <motion.div
@@ -375,7 +375,7 @@ export default function App() {
               {screen === "result" && (
                 <motion.div
                   key="result-screen"
-                  className="absolute inset-0 flex flex-col items-center w-full"
+                  className="absolute inset-0 flex min-h-0 flex-col items-center w-full"
                   initial={{ opacity: 1 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}

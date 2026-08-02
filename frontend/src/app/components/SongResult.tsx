@@ -50,7 +50,7 @@ import {
 import { getSongDetailMotion } from "../lib/detail-motion";
 
 const RESULT_MAX_WIDTH = "min(100%, 1120px)";
-const DISCOVERY_CARD_SIZE = "min(80vw, 55svh, 560px)";
+const DISCOVERY_CARD_SIZE = "min(80vw, 55svh, 560px, max(180px, calc(100dvh - 420px)))";
 const DISCOVERY_TOP_GAP_PX = 40;
 const DISCOVERY_DETAIL_GAP_PX = 12;
 const DISCOVERY_DETAIL_HEIGHT_PX = 120;
@@ -691,10 +691,15 @@ export function SongResult({
       className="relative mx-auto flex-1 min-h-0 touch-pan-y"
       style={{ width: RESULT_MAX_WIDTH }}
     >
-      <div className="relative z-10 flex h-full w-full flex-1 flex-col items-center justify-between">
+      <div
+        className="relative z-10 flex h-full min-h-0 w-full flex-1 flex-col items-center justify-between"
+      >
         <div
           className="mt-auto flex w-full flex-col items-center"
-          style={{ gap: String(DISCOVERY_TOP_GAP_PX) + "px" }}
+          style={{
+            gap: String(DISCOVERY_TOP_GAP_PX) + "px",
+            paddingBottom: "12px",
+          }}
         >
           <div className="flex w-full flex-col items-center">
             <AnimatePresence initial={false} mode="wait">
@@ -704,6 +709,7 @@ export function SongResult({
                 style={{
                   fontSize: "clamp(20px, 3.4svh, 24px)",
                   lineHeight: "clamp(24px, 4svh, 28px)",
+                  paddingInline: "20px",
                 }}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -736,7 +742,10 @@ export function SongResult({
             }}
             tabIndex={0}
           >
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ paddingInline: "20px" }}
+            >
               <motion.div
                 className="relative aspect-square"
                 data-slot="primary-song"
@@ -865,7 +874,7 @@ export function SongResult({
                               height: target.height,
                               rotate: target.rotate,
                               opacity: target.opacity,
-                              borderRadius: DISCOVERY_RADIUS_PX - 6,
+                              borderRadius: DISCOVERY_RADIUS_PX,
                             }}
                             transition={{
                               duration: DISCOVERY_MORPH_HANDOFF_DURATION_MS / 1000,
@@ -929,7 +938,7 @@ export function SongResult({
                             data-slot="discovery-card"
                             style={{
                               inset: String(DISCOVERY_CARD_INSET_PERCENT) + "%",
-                              borderRadius: DISCOVERY_RADIUS_PX - 6,
+                              borderRadius: DISCOVERY_RADIUS_PX,
                               zIndex: discoverySongs.length - position,
                               willChange: "transform, opacity",
                               boxShadow: "0 18px " + DISCOVERY_STACK_TUNING.shadowBlur + "px rgba(23,16,39,0.22)",
@@ -958,8 +967,8 @@ export function SongResult({
                                       scale: layout.scale,
                                       opacity: layout.opacity,
                                     }}
-                                className="absolute inset-0"
-                                style={{ borderRadius: "inherit" }}
+                                className="absolute inset-0 overflow-hidden"
+                                style={{ borderRadius: DISCOVERY_RADIUS_PX }}
                                 onAnimationComplete={() => completeDeckShuffle(index)}
                                 transition={{
                                   default: shouldReduceMotion || motionPhase === "reentering"
@@ -974,7 +983,7 @@ export function SongResult({
                                   className="absolute inset-0 size-full max-w-none object-cover"
                                   draggable={false}
                                   src={candidate.album_image ?? imgAlbum}
-                                  style={{ borderRadius: "inherit" }}
+                                  style={{ borderRadius: DISCOVERY_RADIUS_PX }}
                                 />
                               </motion.div>
                             </DiscoveryDraggableCard>
