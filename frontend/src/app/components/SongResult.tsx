@@ -47,7 +47,13 @@ import {
   sendDiscoveryCardToBack,
   type DiscoveryGesture,
 } from "../lib/discovery-deck";
-import { getSongDetailMotion } from "../lib/detail-motion";
+import {
+  RESULT_ACTION_HEIGHT,
+  RESULT_CONTENT_REVEAL_DELAY_MS,
+  getResultContentMotion,
+  getStableArtworkSource,
+  getSongDetailMotion,
+} from "../lib/detail-motion";
 
 const RESULT_MAX_WIDTH = "min(100%, 1120px)";
 const DISCOVERY_CARD_SIZE = "min(80vw, 55svh, 560px, max(180px, calc(100dvh - 420px)))";
@@ -57,7 +63,6 @@ const DISCOVERY_DETAIL_HEIGHT_PX = 120;
 const DISCOVERY_RADIUS_PX = 24;
 const DISCOVERY_CARD_INSET_PERCENT = 12;
 const DISCOVERY_CHAMBER_PEEK_PX = 20;
-const DISCOVERY_CHAMBER_DELAY_MS = 1600;
 const DISCOVERY_FINDING_DURATION_MS = 2500;
 const DISCOVERY_MORPH_PREP_DURATION_MS = 300;
 const DISCOVERY_MORPH_HANDOFF_DURATION_MS = 560;
@@ -365,6 +370,7 @@ export function SongResult({
   const cardSize = DISCOVERY_CARD_SIZE;
   const shouldReduceMotion = useReducedMotion() ?? false;
   const detailMotion = getSongDetailMotion(shouldReduceMotion);
+  const resultContentMotion = getResultContentMotion(shouldReduceMotion);
   const discoverySongs = getDiscoverySongs(songs);
   const selectedImages = discoverySongs.map((candidate) => candidate.album_image).filter(Boolean) as string[];
   const morphImages = discoverySongs.map((candidate) => candidate.album_image ?? imgAlbum);
@@ -377,6 +383,7 @@ export function SongResult({
   const [isDiscoveryMorphing, setIsDiscoveryMorphing] = useState(false);
   const [morphCapture, setMorphCapture] = useState<DiscoveryMorphCapture | null>(null);
   const [isChamberRevealed, setIsChamberRevealed] = useState(false);
+  const [isResultContentRevealed, setIsResultContentRevealed] = useState(false);
   const primaryArtworkDragX = useMotionValue(0);
   const primaryArtworkDragY = useMotionValue(0);
   const primaryArtworkDragScale = useMotionValue(1);
@@ -440,6 +447,7 @@ export function SongResult({
     setReenteringDeckIndex(null);
     setIsDiscoveryMorphing(false);
     setMorphCapture(null);
+    setIsResultContentRevealed(false);
     gestureRef.current = null;
   }, [discoverySongs.length, songs]);
 
@@ -499,6 +507,19 @@ export function SongResult({
   }, [discoverySongs.length, isDiscoveryMorphing, shouldReduceMotion]);
 
   useEffect(() => {
+    setIsResultContentRevealed(false);
+    if (shouldReduceMotion) {
+      setIsResultContentRevealed(true);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setIsResultContentRevealed(true);
+    }, RESULT_CONTENT_REVEAL_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [shouldReduceMotion, songs]);
+
+  useEffect(() => {
     setIsChamberRevealed(false);
     if (!hasDiscovery) return;
     if (shouldReduceMotion) {
@@ -508,7 +529,7 @@ export function SongResult({
 
     const timer = window.setTimeout(() => {
       setIsChamberRevealed(true);
-    }, DISCOVERY_CHAMBER_DELAY_MS);
+    }, RESULT_CONTENT_REVEAL_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [hasDiscovery, shouldReduceMotion, songs]);
 
@@ -701,7 +722,13 @@ export function SongResult({
             paddingBottom: "12px",
           }}
         >
-          <div className="flex w-full flex-col items-center">
+          <motion.div
+            className="flex w-full flex-col items-center"
+            data-slot="result-heading"
+            initial={resultContentMotion.initial}
+            animate={isResultContentRevealed ? resultContentMotion.animate : resultContentMotion.initial}
+            transition={resultContentMotion.transition}
+          >
             <AnimatePresence initial={false} mode="wait">
               <motion.p
                 key={isPrimary ? "primary-heading" : "discovery-heading"}
@@ -719,7 +746,7 @@ export function SongResult({
                 {description}
               </motion.p>
             </AnimatePresence>
-          </div>
+          </motion.div>
 
           <div
             aria-label={
@@ -776,7 +803,7 @@ export function SongResult({
                     alt={isPrimary ? album : ""}
                     className="absolute inset-0 size-full max-w-none object-cover"
                     draggable={false}
-                    src={songs[0]?.album_image ?? imgAlbum}
+                    src={getStableArtworkSource(songs[0]?.album_image, imgAlbum)}
                     style={{ objectPosition: "50% 50%" }}
                   />
                 </motion.div>
@@ -997,10 +1024,14 @@ export function SongResult({
             )}
           </div>
 
-          <div
+          <motion.div
             aria-live="polite"
             className="relative w-full px-[24px]"
+            data-slot="result-details"
             style={{ height: String(DISCOVERY_DETAIL_HEIGHT_PX) + "px" }}
+            initial={resultContentMotion.initial}
+            animate={isResultContentRevealed ? resultContentMotion.animate : resultContentMotion.initial}
+            transition={resultContentMotion.transition}
           >
             <AnimatePresence initial={false} mode="wait">
               {showFinding ? (
@@ -1062,15 +1093,20 @@ export function SongResult({
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
         </div>
 
-        <div
+        <motion.div
           className="mt-auto flex w-full flex-col items-center"
+          data-slot="result-actions"
           style={{
             gap: "clamp(6px, 1.2svh, 8px)",
             paddingInline: "24px",
+            pointerEvents: isResultContentRevealed ? "auto" : "none",
           }}
+          initial={resultContentMotion.initial}
+          animate={isResultContentRevealed ? resultContentMotion.animate : resultContentMotion.initial}
+          transition={resultContentMotion.transition}
         >
           <motion.a
             aria-disabled={!spotifyUrl}
@@ -1080,9 +1116,10 @@ export function SongResult({
             rel={spotifyUrl ? "noopener noreferrer" : undefined}
             target={spotifyUrl ? "_blank" : undefined}
             style={{
-              padding: "clamp(10px, 1.8svh, 16px) 0",
+              height: RESULT_ACTION_HEIGHT,
               opacity: spotifyUrl ? 1 : 0,
               pointerEvents: spotifyUrl ? "auto" : "none",
+              visibility: spotifyUrl ? "visible" : "hidden",
               WebkitTapHighlightColor: "transparent",
             }}
             animate={{ backgroundColor: accentColor }}
@@ -1119,7 +1156,7 @@ export function SongResult({
             className="relative flex w-full cursor-pointer items-center justify-center gap-[8px] rounded-[1000px] bg-transparent"
             onClick={onStartOver}
             style={{
-              padding: "clamp(10px, 1.8svh, 16px) 0",
+              height: RESULT_ACTION_HEIGHT,
               WebkitTapHighlightColor: "transparent",
             }}
             transition={{
@@ -1165,7 +1202,7 @@ export function SongResult({
               Start over
             </span>
           </motion.button>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

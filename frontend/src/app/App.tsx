@@ -6,6 +6,7 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { SongResult } from "./components/SongResult";
 import {
   fetchAllMoodImages,
+  fetchMoodImages,
   fetchRecommendations,
   preloadImageFiles,
   type SongRecommendation,
@@ -18,6 +19,12 @@ import { createRequestGuard } from "./lib/request-guard";
 
 const RESULT_ACTION_INSET_PX = 24;
 const DEFAULT_FROM = "#5A54F2";
+
+function waitForNextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+}
 
 type Screen = "mood" | "loading" | "result";
 
@@ -167,7 +174,22 @@ export default function App() {
       // Priority-preload first 20 files, rest fire-and-forget
       preloadImageFiles(cached, 20);
       preloadedMoodRef.current = confirmedMood;
+      return;
     }
+
+    let cancelled = false;
+    fetchMoodImages(confirmedMood, 80).then((images) => {
+      if (cancelled || images.length === 0) return;
+      imageCache.current.set(confirmedMood, images);
+      setAlbumImages(images);
+      setAlbumImagesMood(confirmedMood);
+      preloadImageFiles(images, 20);
+      preloadedMoodRef.current = confirmedMood;
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [confirmedMood]);
 
   const handleRecommend = useCallback(async () => {
@@ -191,7 +213,11 @@ export default function App() {
       // Images should already be in cache from mount fetch.
       // If not yet in state (race condition), pull from cache now.
       if (albumImagesMood !== mood || albumImages.length === 0) {
-        const cached = imageCache.current.get(mood);
+        let cached = imageCache.current.get(mood);
+        if (!cached || cached.length === 0) {
+          cached = await fetchMoodImages(mood, 80);
+          if (cached.length > 0) imageCache.current.set(mood, cached);
+        }
         if (cached && cached.length > 0) {
           setAlbumImages(cached);
           setAlbumImagesMood(mood);
@@ -202,7 +228,18 @@ export default function App() {
       const result = await fetchRecommendations(mood, sliderValue);
       await minDelay;
       if (recommendRequestGuard.current.isCurrent(requestId)) {
+        const primaryArtworkUrl = result[0]?.album_image;
+        if (primaryArtworkUrl) {
+          await preloadImageFiles([primaryArtworkUrl], 1);
+        }
+
+        if (!recommendRequestGuard.current.isCurrent(requestId)) return;
         setSongs(result);
+
+        // Let the loading hero commit the selected artwork before Motion captures
+        // the shared layout source for the result screen.
+        await waitForNextFrame();
+        if (!recommendRequestGuard.current.isCurrent(requestId)) return;
         setScreen("result");
       }
     } finally {

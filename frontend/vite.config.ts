@@ -21,6 +21,9 @@ export default defineConfig({
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   server: {
+    // Never silently move the frontend to 3001/3002/etc.; those ports belong
+    // to the API and a fallback port makes the browser use the wrong runtime.
+    strictPort: true,
     proxy: {
       "/api": {
         target: "http://127.0.0.1:3001",

@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "motion/react";
-import { toThumb } from "@/app/lib/api";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
+import { getStableArtworkSource } from "../lib/detail-motion";
 
 interface LoadingScreenProps {
   mood: string;
@@ -305,8 +305,6 @@ export function LoadingScreen({
       return next;
     });
   }, [imagesKey, imagePool, totalTiles]);
-  const highlightThumb = highlightImageUrl ? toThumb(highlightImageUrl) : null;
-
   // Pick random tiles and run the 3-phase swap: shrink → change image → grow
   const swapRandomTiles = useCallback(() => {
     if (imagePool.length < 2) return;
@@ -468,7 +466,7 @@ export function LoadingScreen({
                   colIndex === hero.colIndex;
 
                 if (isHero) {
-                  const heroSrc = highlightThumb ?? defaultSrc ?? imgAlbum;
+                  const heroSrc = getStableArtworkSource(highlightImageUrl, defaultSrc ?? imgAlbum);
                   return (
                     <div
                       key={`hero-${rowIndex}-${colIndex}`}
@@ -488,6 +486,7 @@ export function LoadingScreen({
                         }}
                       >
                         <ProgressiveImage
+                          key={heroSrc}
                           src={heroSrc}
                           alt="Featured album cover"
                           className="absolute inset-0 max-w-none object-cover size-full"

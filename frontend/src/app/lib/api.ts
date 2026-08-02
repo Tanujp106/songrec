@@ -16,9 +16,27 @@ const viteEnv = (import.meta as ImportMeta & {
   env?: { VITE_API_BASE_URL?: string; PROD?: boolean };
 }).env;
 
-const API_BASE =
-  viteEnv?.VITE_API_BASE_URL ??
-  (viteEnv?.PROD ? "" : "http://localhost:3001");
+function resolveApiBase(): string {
+  const configuredBase = viteEnv?.VITE_API_BASE_URL?.trim();
+
+  // In local development, keep requests same-origin so Vite's proxy remains
+  // the single path to the API even when the frontend is opened on a fallback
+  // port. Remote API URLs remain supported for non-local development setups.
+  if (!viteEnv?.PROD && configuredBase) {
+    try {
+      const parsed = new URL(configuredBase);
+      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+        return "";
+      }
+    } catch {
+      // Fall through and use the configured value as-is.
+    }
+  }
+
+  return configuredBase ?? (viteEnv?.PROD ? "" : "");
+}
+
+const API_BASE = resolveApiBase();
 
 const ALL_MOODS = [
   "party", "feel-good", "soft", "indie",
@@ -223,26 +241,34 @@ export async function fetchMoodImages(
     mood
   )}&limit=${encodeURIComponent(String(limit))}`;
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      headers: { Accept: "application/json" },
-      // Allow browser to cache the URL list — images don't change often
-    });
-  } catch {
-    return [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+        // Allow the browser to cache the URL list — images don't change often.
+      });
+
+      const contentType = response.headers.get("content-type") ?? "";
+      const data = contentType.includes("application/json")
+        ? await response.json().catch(() => ({}))
+        : {};
+
+      if (response.ok) {
+        const images = Array.isArray(data?.images) ? data.images : [];
+        return images
+          .filter((img: unknown) => typeof img === "string")
+          .map((img: string) => toThumb(img));
+      }
+    } catch {
+      // The API can still be compiling when the frontend mounts in dev.
+    }
+
+    if (attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+    }
   }
 
-  const contentType = response.headers.get("content-type") ?? "";
-  const data = contentType.includes("application/json")
-    ? await response.json().catch(() => ({}))
-    : {};
-  if (!response.ok) return [];
-
-  const images = Array.isArray(data?.images) ? data.images : [];
-  return images
-    .filter((img: unknown) => typeof img === "string")
-    .map((img: string) => toThumb(img));
+  return [];
 }
 
 /**
