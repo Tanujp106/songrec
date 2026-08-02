@@ -2,6 +2,7 @@ import { requireEnv } from "./env";
 
 let cachedToken: { accessToken: string; expiresAt: number; type: "user" | "app" } | null = null;
 const SPOTIFY_REQUEST_TIMEOUT_MS = 10_000;
+const SPOTIFY_API_ORIGIN = "https://api.spotify.com";
 
 function getSpotifyConfig() {
   return {
@@ -89,16 +90,25 @@ async function spotifyFetch<T>(url: string, accessToken: string, attempt = 0): P
   return (await response.json()) as T;
 }
 
+function assertSpotifyApiUrl(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  if (url.protocol !== "https:" || url.origin !== SPOTIFY_API_ORIGIN) {
+    throw new Error("Spotify API URL is not allowed");
+  }
+  return url.toString();
+}
+
 export async function spotifyGet<T>(url: string): Promise<T> {
+  const safeUrl = assertSpotifyApiUrl(url);
   try {
     const accessToken = await getSpotifyAccessToken();
-    return await spotifyFetch<T>(url, accessToken);
+    return await spotifyFetch<T>(safeUrl, accessToken);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("(401)")) {
       cachedToken = null;
       const accessToken = await getSpotifyAccessToken();
-      return await spotifyFetch<T>(url, accessToken);
+      return await spotifyFetch<T>(safeUrl, accessToken);
     }
     throw error;
   }

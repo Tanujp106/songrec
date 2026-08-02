@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { corsHeaders } from "@/lib/cors";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,40 @@ function html(body: string) {
 </html>`;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+    return entities[character];
+  });
+}
+
+function responseHeaders(origin?: string | null) {
+  return {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'",
+    ...corsHeaders(origin)
+  };
+}
+
 export async function GET(request: Request) {
+  const origin = request.headers.get("origin");
+  const rate = checkRateLimit(request, "spotify-callback", { limit: 10, windowMs: 10 * 60_000 });
+  if (!rate.allowed) {
+    return new NextResponse(html("<h2>Too many requests. Please try again later.</h2>"), {
+      status: 429,
+      headers: { ...responseHeaders(origin), "Retry-After": String(rate.retryAfterSeconds) }
+    });
+  }
+
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -36,26 +70,26 @@ export async function GET(request: Request) {
     .split(";")
     .map((c) => c.trim())
     .find((c) => c.startsWith("spotify_oauth_state="))
-    ?.split("=")[1];
+    ?.slice("spotify_oauth_state=".length);
 
   if (!code) {
     return new NextResponse(html("<h2>Missing code</h2>"), {
       status: 400,
-      headers: { "Content-Type": "text/html", ...corsHeaders() }
+      headers: responseHeaders(origin)
     });
   }
 
   if (!state || !cookieState || state !== cookieState) {
     return new NextResponse(html("<h2>Invalid state</h2>"), {
       status: 400,
-      headers: { "Content-Type": "text/html", ...corsHeaders() }
+      headers: responseHeaders(origin)
     });
   }
 
   if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
     return new NextResponse(html("<h2>Missing Spotify client credentials</h2>"), {
       status: 500,
-      headers: { "Content-Type": "text/html", ...corsHeaders() }
+      headers: responseHeaders(origin)
     });
   }
 
@@ -81,14 +115,14 @@ export async function GET(request: Request) {
   } catch {
     return new NextResponse(html("<h2>Token exchange failed</h2>"), {
       status: 500,
-      headers: { "Content-Type": "text/html", ...corsHeaders() }
+      headers: responseHeaders(origin)
     });
   }
 
   if (!tokenResponse.ok) {
     return new NextResponse(html("<h2>Token exchange failed</h2>"), {
       status: 500,
-      headers: { "Content-Type": "text/html", ...corsHeaders() }
+      headers: responseHeaders(origin)
     });
   }
 
@@ -102,25 +136,32 @@ export async function GET(request: Request) {
   if (!refreshToken) {
     return new NextResponse(html("<h2>No refresh token returned.</h2>"), {
       status: 500,
-      headers: { "Content-Type": "text/html", ...corsHeaders() }
+      headers: responseHeaders(origin)
     });
   }
 
+  const tokenDisplay =
+    process.env.NODE_ENV === "development" &&
+    process.env.SPOTIFY_OAUTH_DISPLAY_TOKEN === "1"
+      ? `<p>Add this to your <code>.env.local</code> and restart the server:</p>
+      <pre>SPOTIFY_REFRESH_TOKEN=${escapeHtml(refreshToken)}</pre>`
+      : "<p>Spotify is connected. The refresh token was not displayed by this server.</p>";
+
   const response = new NextResponse(
-    html(
-      `<h2>Spotify connected</h2>
-      <p>Add this to your <code>.env.local</code> and restart the server:</p>
-      <pre>SPOTIFY_REFRESH_TOKEN=${refreshToken}</pre>`
-    ),
+    html(`<h2>Spotify connected</h2>${tokenDisplay}`),
     {
       status: 200,
-      headers: { "Content-Type": "text/html", ...corsHeaders() }
+      headers: responseHeaders(origin)
     }
   );
 
   response.headers.set(
     "Set-Cookie",
-    "spotify_oauth_state=; Path=/; Max-Age=0; SameSite=Lax"
+    `spotify_oauth_state=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${
+      url.protocol === "https:" || process.env.NODE_ENV === "production"
+        ? "; Secure"
+        : ""
+    }`
   );
 
   return response;

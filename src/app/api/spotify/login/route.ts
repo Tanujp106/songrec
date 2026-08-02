@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { corsHeaders } from "@/lib/cors";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -11,10 +12,22 @@ const SPOTIFY_REDIRECT_URI =
 
 export async function GET(request: Request) {
   const origin = request.headers.get("origin");
+  const rate = checkRateLimit(request, "spotify-login", { limit: 10, windowMs: 10 * 60_000 });
+  if (!rate.allowed) {
+    return new NextResponse("Too many requests. Please try again later.", {
+      status: 429,
+      headers: {
+        ...corsHeaders(origin),
+        "Cache-Control": "no-store",
+        "Retry-After": String(rate.retryAfterSeconds)
+      }
+    });
+  }
+
   if (!SPOTIFY_CLIENT_ID) {
     return new NextResponse("Missing SPOTIFY_CLIENT_ID", {
       status: 500,
-      headers: corsHeaders(origin)
+      headers: { ...corsHeaders(origin), "Cache-Control": "no-store" }
     });
   }
 
@@ -38,7 +51,12 @@ export async function GET(request: Request) {
 
   response.headers.set(
     "Set-Cookie",
-    `spotify_oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
+    `spotify_oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${
+      new URL(request.url).protocol === "https:" || process.env.NODE_ENV === "production"
+        ? "; Secure"
+        : ""
+    }`
   );
+  response.headers.set("Cache-Control", "no-store");
   return response;
 }

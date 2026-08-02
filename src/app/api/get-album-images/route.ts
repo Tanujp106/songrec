@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
-import { ALLOWED_MOODS, normalizeMood } from "@/lib/utils";
+import { ALLOWED_MOODS, normalizeMood, normalizeSpotifyImageUrl } from "@/lib/utils";
 import { corsHeaders } from "@/lib/cors";
 import { jsonInternalError } from "@/lib/http";
+import { acquireConcurrencySlot, checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function jsonWithCors(body: unknown, init?: ResponseInit, requestOrigin?: string | null) {
   return NextResponse.json(body, {
@@ -28,9 +30,22 @@ function shuffle<T>(items: T[]): T[] {
 }
 
 export async function GET(request: Request) {
+  const origin = request.headers.get("origin");
+  const rate = checkRateLimit(request, "get-album-images", { limit: 30, windowMs: 60_000 });
+  if (!rate.allowed) {
+    return jsonWithCors(
+      { error: "Too many requests. Please try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rate.retryAfterSeconds) }
+      },
+      origin
+    );
+  }
+
+  let releaseProviderSlot: (() => void) | null = null;
+
   try {
-    const origin = request.headers.get("origin");
-    const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     const moodRaw = searchParams.get("mood")?.trim().toLowerCase();
     const limitParam = Number(searchParams.get("limit"));
@@ -54,6 +69,16 @@ export async function GET(request: Request) {
       );
     }
 
+    releaseProviderSlot = acquireConcurrencySlot("get-album-images", 8);
+    if (!releaseProviderSlot) {
+      return jsonWithCors(
+        { error: "Server is busy. Please retry shortly." },
+        { status: 503, headers: { "Retry-After": "2" } },
+        origin
+      );
+    }
+
+    const supabase = getSupabaseClient();
     let query = supabase
       .from("songs")
       .select("album_image")
@@ -75,7 +100,7 @@ export async function GET(request: Request) {
 
     const rows = (data ?? []) as { album_image: string | null }[];
     const images = Array.from(
-      new Set(rows.map((row) => row.album_image).filter(Boolean))
+      new Set(rows.map((row) => normalizeSpotifyImageUrl(row.album_image)).filter(Boolean))
     ) as string[];
 
     const shuffled = shuffle(images);
@@ -85,5 +110,7 @@ export async function GET(request: Request) {
     console.error("[get-album-images] Unhandled error:", message);
     const origin = request.headers.get("origin");
     return jsonInternalError({ headers: corsHeaders(origin) });
+  } finally {
+    releaseProviderSlot?.();
   }
 }

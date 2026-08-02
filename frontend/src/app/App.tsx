@@ -5,7 +5,6 @@ import { PopularitySlider } from "./components/PopularitySlider";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { SongResult } from "./components/SongResult";
 import {
-  fetchAllMoodImages,
   fetchMoodImages,
   fetchRecommendations,
   preloadImageFiles,
@@ -143,24 +142,11 @@ export default function App() {
   // Unique key per mood so AnimatePresence crossfades between moods
   const bgKey = confirmedMood ?? "__default__";
 
-  // ── A: Pre-fetch ALL mood images on mount ──
+  // ── A: Cache image sets only for moods the user actually selects ──
   const imageCache = useRef<Map<string, string[]>>(new Map());
   const recommendRequestGuard = useRef(createRequestGuard());
   const [albumImages, setAlbumImages] = useState<string[]>([]);
   const preloadedMoodRef = useRef<string | null>(null);
-
-  // Fire all 8 mood image fetches on app mount — runs once
-  useEffect(() => {
-    fetchAllMoodImages(80).then((map) => {
-      imageCache.current = map;
-      // If user already picked a mood before fetch finished, apply it now
-      if (confirmedMood && map.has(confirmedMood)) {
-        setAlbumImages(map.get(confirmedMood)!);
-        setAlbumImagesMood(confirmedMood);
-      }
-    }).catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // ── C: Priority-preload first 20 images when mood is confirmed ──
   useEffect(() => {

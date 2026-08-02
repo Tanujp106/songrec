@@ -6,8 +6,9 @@ export function corsHeaders(requestOrigin?: string | null) {
     "http://localhost:5173"
   ];
 
-  // If requestOrigin is provided and is in the allowed list, use it
-  // Otherwise, use the first allowed origin or "*" as fallback
+  // Never reflect an untrusted Origin. The fallback keeps direct/non-browser
+  // requests compatible while browsers still cannot read a response from an
+  // unapproved origin.
   const origin = requestOrigin && allowedOrigins.includes(requestOrigin)
     ? requestOrigin
     : allowedOrigins[0];
@@ -15,8 +16,7 @@ export function corsHeaders(requestOrigin?: string | null) {
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     Vary: "Origin"
   };
 }

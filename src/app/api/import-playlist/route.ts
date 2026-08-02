@@ -6,13 +6,19 @@ import {
   extractPlaylistId,
   mergeUnique,
   normalizeMoodArray,
-  filterAllowedMoods
+  filterAllowedMoods,
+  normalizeSpotifyImageUrl,
+  normalizeSpotifyTrackUrl
 } from "@/lib/utils";
 import { jsonInternalError, parseJson } from "@/lib/http";
 import { corsHeaders } from "@/lib/cors";
+import { isImportRequestAuthorized } from "@/lib/auth";
+import { acquireConcurrencySlot, checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 const MAX_PLAYLIST_ITEMS = 1_000;
+const MAX_PLAYLIST_PAGES = 10;
+const MAX_REQUEST_MOODS = 8;
 
 function jsonWithCors(body: unknown, init?: ResponseInit, requestOrigin?: string | null) {
   return NextResponse.json(body, {
@@ -102,14 +108,29 @@ async function fetchPlaylistTracks(
     try {
       let url = initialUrl;
       let page = 0;
+      const visitedUrls = new Set<string>();
       while (url) {
         page += 1;
+        if (page > MAX_PLAYLIST_PAGES) {
+          throw new Error(`Playlist exceeds the ${MAX_PLAYLIST_ITEMS}-track import limit`);
+        }
+        if (visitedUrls.has(url)) {
+          throw new Error("Spotify returned a repeated playlist page");
+        }
+        visitedUrls.add(url);
         log?.(`Fetching playlist page ${page}...`);
         const data = await spotifyGet<
           SpotifyPlaylistTracksResponse | SpotifyPlaylistItemsResponse
         >(url);
-        items.push(...(((data as any).items ?? []) as SpotifyTrackItem[]));
-        url = ((data as any).next ?? "") as string;
+        const pageItems = Array.isArray((data as { items?: unknown }).items)
+          ? ((data as { items: unknown[] }).items as SpotifyTrackItem[])
+          : [];
+        if (items.length + pageItems.length > MAX_PLAYLIST_ITEMS) {
+          throw new Error(`Playlist exceeds the ${MAX_PLAYLIST_ITEMS}-track import limit`);
+        }
+        items.push(...pageItems);
+        const nextUrl = (data as { next?: unknown }).next;
+        url = typeof nextUrl === "string" ? nextUrl : "";
         if (items.length >= MAX_PLAYLIST_ITEMS && url) {
           throw new Error(`Playlist exceeds the ${MAX_PLAYLIST_ITEMS}-track import limit`);
         }
@@ -202,16 +223,37 @@ async function fetchAlbumsBatch(
 }
 
 export async function POST(request: Request) {
+  const origin = request.headers.get("origin");
+  const rate = checkRateLimit(request, "import-playlist", { limit: 5, windowMs: 10 * 60_000 });
+  if (!rate.allowed) {
+    return jsonWithCors(
+      { error: "Too many requests. Please try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rate.retryAfterSeconds) }
+      },
+      origin
+    );
+  }
+
+  if (!isImportRequestAuthorized(request)) {
+    return jsonWithCors(
+      { error: "Unauthorized" },
+      { status: 401 },
+      origin
+    );
+  }
+
+  let releaseProviderSlot: (() => void) | null = null;
+
   try {
-    const origin = request.headers.get("origin");
-    const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     const logProgress =
       searchParams.get("progress") === "1" ||
       process.env.IMPORT_LOG_PROGRESS === "1";
     const log = logProgress ? (message: string) => console.log(message) : null;
 
-    const body = await parseJson(request);
+    const body = await parseJson<Record<string, unknown>>(request);
     const playlistUrl = body?.playlist_url;
     const moods = filterAllowedMoods(normalizeMoodArray(body?.moods));
     const effectiveMoods = moods.length > 0 ? moods : ["unsorted"];
@@ -220,6 +262,20 @@ export async function POST(request: Request) {
     if (typeof playlistUrl !== "string") {
       return jsonWithCors(
         { error: "playlist_url (string) is required." },
+        { status: 400 },
+        origin
+      );
+    }
+    if (playlistUrl.length > 512) {
+      return jsonWithCors(
+        { error: "playlist_url is too long." },
+        { status: 400 },
+        origin
+      );
+    }
+    if (Array.isArray(body?.moods) && body.moods.length > MAX_REQUEST_MOODS) {
+      return jsonWithCors(
+        { error: `moods cannot contain more than ${MAX_REQUEST_MOODS} values.` },
         { status: 400 },
         origin
       );
@@ -244,6 +300,16 @@ export async function POST(request: Request) {
       );
     }
 
+    releaseProviderSlot = acquireConcurrencySlot("import-playlist", 2);
+    if (!releaseProviderSlot) {
+      return jsonWithCors(
+        { error: "Server is busy. Please retry shortly." },
+        { status: 503, headers: { "Retry-After": "2" } },
+        origin
+      );
+    }
+
+    const supabase = getSupabaseClient();
     let playlistItems: SpotifyTrackItem[];
     try {
       log?.(`Starting import for playlist ${playlistId}`);
@@ -285,12 +351,14 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const artistNames = track.artists?.map((a) => a.name).filter(Boolean) ?? [];
-      const albumImage = track.album?.images?.[0]?.url ?? null;
+      const artistNames = track.artists
+        ?.map((artist) => (artist && typeof artist.name === "string" ? artist.name : ""))
+        .filter(Boolean) ?? [];
+      const albumImage = normalizeSpotifyImageUrl(track.album?.images?.[0]?.url);
       const albumId = track.album?.id ?? null;
       if (albumId) trackAlbumMap.set(track.id, albumId);
       const albumName = track.album?.name ?? null;
-      const spotifyUrl = track.external_urls?.spotify ?? null;
+      const spotifyUrl = normalizeSpotifyTrackUrl(track.external_urls?.spotify);
       const popularity =
         typeof track.popularity === "number" ? track.popularity : null;
       const durationMs =
@@ -347,8 +415,8 @@ export async function POST(request: Request) {
             typeof data.popularity === "number"
               ? data.popularity
               : record.popularity,
-          spotify_url: data.external_urls?.spotify ?? record.spotify_url,
-          album_image: data.album?.images?.[0]?.url ?? record.album_image,
+          spotify_url: normalizeSpotifyTrackUrl(data.external_urls?.spotify) ?? record.spotify_url,
+          album_image: normalizeSpotifyImageUrl(data.album?.images?.[0]?.url) ?? record.album_image,
           album_id: data.album?.id ?? record.album_id,
           album_name: data.album?.name ?? record.album_name,
           duration_ms:
@@ -453,5 +521,7 @@ export async function POST(request: Request) {
     console.error("[import-playlist] Unhandled error:", message);
     const origin = request.headers.get("origin");
     return jsonInternalError({ headers: corsHeaders(origin) });
+  } finally {
+    releaseProviderSlot?.();
   }
 }

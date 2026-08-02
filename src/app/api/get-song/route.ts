@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { getSupabaseClient } from "@/lib/supabase";
-import { ALLOWED_MOODS, clamp, normalizeMood } from "@/lib/utils";
+import {
+  ALLOWED_MOODS,
+  clamp,
+  normalizeMood,
+  normalizeSpotifyImageUrl,
+  normalizeSpotifyTrackUrl
+} from "@/lib/utils";
 import { corsHeaders } from "@/lib/cors";
 import { jsonInternalError } from "@/lib/http";
 import { selectUniqueRecommendations } from "@/lib/recommendations";
+import { acquireConcurrencySlot, checkRateLimit } from "@/lib/rate-limit";
 import { createHash } from "crypto";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
 const MAX_RECENT_TRACKS = 12;
@@ -26,7 +34,11 @@ let lastCleanup = 0;
 function jsonWithCors(body: unknown, init?: ResponseInit, requestOrigin?: string | null) {
   return NextResponse.json(body, {
     ...init,
-    headers: { ...(init?.headers ?? {}), ...corsHeaders(requestOrigin) }
+    headers: {
+      "Cache-Control": "no-store",
+      ...(init?.headers ?? {}),
+      ...corsHeaders(requestOrigin)
+    }
   });
 }
 
@@ -79,12 +91,26 @@ function cleanupSessions(now: number) {
 }
 
 export async function GET(request: Request) {
+  const origin = request.headers.get("origin");
+  const rate = checkRateLimit(request, "get-song", { limit: 30, windowMs: 60_000 });
+  if (!rate.allowed) {
+    return jsonWithCors(
+      { error: "Too many requests. Please try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rate.retryAfterSeconds) }
+      },
+      origin
+    );
+  }
+
+  let releaseProviderSlot: (() => void) | null = null;
+
   try {
-    const origin = request.headers.get("origin");
-    const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     const moodRaw = searchParams.get("mood")?.trim().toLowerCase();
-    const sliderValue = Number(searchParams.get("sliderValue"));
+    const sliderRaw = searchParams.get("sliderValue");
+    const sliderValue = sliderRaw === null ? Number.NaN : Number(sliderRaw);
     const now = Date.now();
 
     if (!moodRaw) {
@@ -121,6 +147,16 @@ export async function GET(request: Request) {
       );
     }
 
+    releaseProviderSlot = acquireConcurrencySlot("get-song", 8);
+    if (!releaseProviderSlot) {
+      return jsonWithCors(
+        { error: "Server is busy. Please retry shortly." },
+        { status: 503, headers: { "Retry-After": "2" } },
+        origin
+      );
+    }
+
+    const supabase = getSupabaseClient();
     let query = supabase
       .from("songs")
       .select(
@@ -172,7 +208,9 @@ export async function GET(request: Request) {
     });
 
     const selected = selectUniqueRecommendations(rows, weights);
-    const selectedKeys = selected.map((row) => row.spotify_url ?? `${row.song_name}::${row.artist.join("|")}`);
+    const selectedKeys = selected.map((row) =>
+      normalizeSpotifyTrackUrl(row.spotify_url) ?? `${row.song_name}::${row.artist.join("|")}`
+    );
     const selectedArtists = selected.flatMap((row) => row.artist.map((artist) => artist.toLowerCase()));
     session.tracks = [...session.tracks, ...selectedKeys].slice(-MAX_RECENT_TRACKS);
     session.artists = [...session.artists, ...selectedArtists].slice(-MAX_RECENT_ARTISTS);
@@ -182,8 +220,8 @@ export async function GET(request: Request) {
     const songs = selected.map((row) => ({
       song_name: row.song_name,
       artist: row.artist ?? [],
-      album_image: row.album_image ?? null,
-      spotify_url: row.spotify_url ?? null,
+      album_image: normalizeSpotifyImageUrl(row.album_image),
+      spotify_url: normalizeSpotifyTrackUrl(row.spotify_url),
       popularity: row.popularity,
       release_year: row.release_year ?? null,
       duration_ms: row.duration_ms ?? null,
@@ -199,5 +237,7 @@ export async function GET(request: Request) {
     console.error("[get-song] Unhandled error:", message);
     const origin = request.headers.get("origin");
     return jsonInternalError({ headers: corsHeaders(origin) });
+  } finally {
+    releaseProviderSlot?.();
   }
 }

@@ -253,6 +253,10 @@ export async function fetchMoodImages(
         ? await response.json().catch(() => ({}))
         : {};
 
+      // A client-side retry multiplies a server-side rate limit into more
+      // traffic. Treat all client errors, especially 429, as terminal.
+      if (response.status >= 400 && response.status < 500) return [];
+
       if (response.ok) {
         const images = Array.isArray(data?.images) ? data.images : [];
         return images
@@ -272,15 +276,15 @@ export async function fetchMoodImages(
 }
 
 /**
- * Fetch images for ALL moods in parallel on app mount.
+ * Fetch images for an explicit set of moods.
  * Returns a Map<mood, thumbnailUrl[]>.
- * Each API call is ~1KB JSON. 8 calls fire simultaneously.
  */
 export async function fetchAllMoodImages(
-  limit = 80
+  limit = 80,
+  moods: readonly string[] = ALL_MOODS
 ): Promise<Map<string, string[]>> {
   const results = await Promise.allSettled(
-    ALL_MOODS.map(async (mood) => {
+    moods.map(async (mood) => {
       const images = await fetchMoodImages(mood, limit);
       return { mood, images };
     })

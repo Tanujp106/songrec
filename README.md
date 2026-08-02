@@ -32,7 +32,9 @@ Prerequisites: Node.js 18.17+, Spotify Developer credentials, and a Supabase pro
    cd frontend && npm install && cd ..
    ```
 
-2. Create `.env.local` in the repository root using `.env.local.example`. Set the server-only `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` values. The Spotify OAuth variables are only required for the playlist-import flow.
+2. Create `.env.local` in the repository root using `.env.local.example`. Set the server-only `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SUPABASE_URL`, and `SUPABASE_SECRET_KEY` values. The Spotify OAuth variables are only required for the playlist-import flow. Set a strong random `IMPORT_API_TOKEN` before enabling playlist imports; requests must send `Authorization: Bearer <token>`.
+
+   The OAuth callback does not display refresh tokens in production. For a local development-only setup, explicitly set `SPOTIFY_OAUTH_DISPLAY_TOKEN=1` while running `next dev`, then turn it off after copying the token.
 
    For frontend-only values, copy `frontend/.env.example` to `frontend/.env.local`. Keep `VITE_API_BASE_URL` pointed at the API server and leave the analytics IDs blank until their production properties exist.
 

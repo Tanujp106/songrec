@@ -1,8 +1,18 @@
 export function extractPlaylistId(input: string): string | null {
   const trimmed = input.trim();
 
-  const urlMatch = trimmed.match(/playlist\/([a-zA-Z0-9]+)(\?.*)?$/);
-  if (urlMatch) return urlMatch[1];
+  try {
+    const url = new URL(trimmed);
+    if (
+      url.protocol === "https:" &&
+      (url.hostname === "open.spotify.com" || url.hostname === "play.spotify.com")
+    ) {
+      const urlMatch = url.pathname.match(/^\/playlist\/([a-zA-Z0-9]+)$/);
+      if (urlMatch) return urlMatch[1];
+    }
+  } catch {
+    // Fall through to the Spotify URI and raw-ID formats below.
+  }
 
   const uriMatch = trimmed.match(/^spotify:playlist:([a-zA-Z0-9]+)$/);
   if (uriMatch) return uriMatch[1];
@@ -11,6 +21,40 @@ export function extractPlaylistId(input: string): string | null {
   if (idMatch) return trimmed;
 
   return null;
+}
+
+function safeHttpsUrl(
+  value: unknown,
+  allowedHosts: readonly string[],
+  pathPrefix?: string
+): string | null {
+  if (typeof value !== "string" || value.length > 2_048) return null;
+
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      !allowedHosts.includes(url.hostname) ||
+      (pathPrefix && !url.pathname.startsWith(pathPrefix))
+    ) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeSpotifyTrackUrl(value: unknown): string | null {
+  return safeHttpsUrl(value, ["open.spotify.com"], "/track/");
+}
+
+export function normalizeSpotifyImageUrl(value: unknown): string | null {
+  return safeHttpsUrl(value, [
+    "i.scdn.co",
+    "mosaic.scdn.co",
+    "image-cdn-ak.spotifycdn.com"
+  ]);
 }
 
 
