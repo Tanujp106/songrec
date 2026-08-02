@@ -12,12 +12,16 @@ import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
 import {
   createDiscoveryDeckState,
+  DISCOVERY_FINDING_GRID_COLUMNS,
+  DISCOVERY_FINDING_TILE_COUNT,
   enterDiscovery,
   finishDiscovery,
   getActiveSongIndex,
+  getDiscoveryCardMotionPhase,
   getDeckCardLayout,
   getDiscoveryGesture,
   getDiscoveryImagePool,
+  getDiscoveryMorphDeckIndex,
   getDiscoverySongs,
   getDiscoverySwipeAction,
   returnToPrimary,
@@ -62,8 +66,8 @@ function FindingAnimation({
   candidateImages: string[];
   shouldReduceMotion: boolean;
 }) {
-  const tileCount = 24;
-  const columns = 6;
+  const tileCount = DISCOVERY_FINDING_TILE_COUNT;
+  const columns = DISCOVERY_FINDING_GRID_COLUMNS;
   const pool = candidateImages.length > 0 ? candidateImages : [imgAlbum];
   const [tileStates, setTileStates] = useState(() => {
     const initial = new Map<number, { src: string; phase: "idle" | "shrinking" | "growing" }>();
@@ -126,8 +130,8 @@ function FindingAnimation({
       transition={{ duration: shouldReduceMotion ? 0 : 0.45, ease: "easeOut" }}
       style={{
         gridTemplateColumns: "repeat(" + String(columns) + ", minmax(0, 1fr))",
-        gap: "8px",
-        padding: "10%",
+        gap: "6px",
+        padding: "5%",
       }}
     >
       {Array.from({ length: tileCount }, (_, index) => {
@@ -135,10 +139,13 @@ function FindingAnimation({
         const isShrinking = tile.phase === "shrinking";
         const isGrowing = tile.phase === "growing";
         return (
-          <div
+          <motion.div
             key={index}
             className="relative aspect-square overflow-hidden rounded-full"
             data-slot="discovery-candidate"
+            layoutId={getDiscoveryMorphDeckIndex(index) === null
+              ? undefined
+              : "discovery-card-" + String(getDiscoveryMorphDeckIndex(index))}
           >
             <div
               className="absolute inset-0"
@@ -159,7 +166,7 @@ function FindingAnimation({
                 src={tile.src}
               />
             </div>
-          </div>
+          </motion.div>
         );
       })}
     </motion.div>
@@ -183,6 +190,7 @@ export function SongResult({
   const candidateImages = getDiscoveryImagePool(selectedImages, albumImages);
   const [deckState, setDeckState] = useState(createDiscoveryDeckState);
   const [departingDeckIndex, setDepartingDeckIndex] = useState<number | null>(null);
+  const [reenteringDeckIndex, setReenteringDeckIndex] = useState<number | null>(null);
   const [isChamberRevealed, setIsChamberRevealed] = useState(false);
   const gestureRef = useRef<GestureStart | null>(null);
 
@@ -204,8 +212,17 @@ export function SongResult({
   useEffect(() => {
     setDeckState(createDiscoveryDeckState());
     setDepartingDeckIndex(null);
+    setReenteringDeckIndex(null);
     gestureRef.current = null;
   }, [songs]);
+
+  useEffect(() => {
+    if (reenteringDeckIndex === null) return;
+    const frame = window.requestAnimationFrame(() => {
+      setReenteringDeckIndex(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [reenteringDeckIndex]);
 
   useEffect(() => {
     setIsChamberRevealed(false);
@@ -328,6 +345,7 @@ export function SongResult({
 
   const completeDeckShuffle = useCallback((index: number) => {
     if (departingDeckIndex !== index) return;
+    setReenteringDeckIndex(index);
     setDeckState((state) => shuffleDiscoveryDeck(state, discoverySongs.length));
     setDepartingDeckIndex(null);
   }, [departingDeckIndex, discoverySongs.length]);
@@ -433,7 +451,7 @@ export function SongResult({
                   willChange: "left, transform",
                 }}
               >
-                <AnimatePresence initial={false} mode="wait">
+                <AnimatePresence initial={false} mode="sync">
                   {isFinding && (
                     <motion.div
                       key="finding"
@@ -456,10 +474,10 @@ export function SongResult({
                       key="deck"
                       className="absolute inset-0"
                       data-slot="discovery-deck"
-                      initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.96 }}
-                      animate={{ opacity: 1, scale: 1 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: shouldReduceMotion ? 0 : 0.24, ease: "easeOut" }}
+                      transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }}
                     >
                       {discoverySongs.map((candidate, index) => {
                         const position = (
@@ -473,18 +491,24 @@ export function SongResult({
                           stackOpacityStep: dial.stack.opacityStep,
                         });
                         const isTopCard = position === 0;
-                        const isDeparting = departingDeckIndex === index;
+                        const motionPhase = getDiscoveryCardMotionPhase({
+                          index,
+                          departingDeckIndex,
+                          reenteringDeckIndex,
+                        });
                         const candidateKey = candidate.spotify_url ??
                           candidate.song_name + "-" + String(index);
 
                         return (
                           <motion.div
                             key={candidateKey}
+                            layoutId={"discovery-card-" + String(index)}
+                            layout
                             aria-hidden={!isTopCard}
                             className="absolute overflow-hidden"
                             data-active={isTopCard ? "true" : "false"}
                             data-slot="discovery-card"
-                            animate={isDeparting
+                            animate={motionPhase === "departing"
                               ? {
                                   x: "-" + dial.interaction.exitDistance + "%",
                                   y: 8,
@@ -507,7 +531,16 @@ export function SongResult({
                               willChange: "transform, opacity",
                               boxShadow: "0 18px " + dial.stack.shadowBlur + "px rgba(23,16,39,0.22)",
                             }}
-                            transition={shouldReduceMotion ? { duration: 0 } : isDeparting ? { duration: dial.timing.exitDuration, ease: "easeOut" } : dial.timing.cardSpring as never}
+                            transition={{
+                              layout: shouldReduceMotion || motionPhase === "reentering"
+                                ? { duration: 0 }
+                                : morph.spring,
+                              default: shouldReduceMotion || motionPhase === "reentering"
+                                ? { duration: 0 }
+                                : motionPhase === "departing"
+                                  ? { duration: dial.timing.exitDuration, ease: "easeOut" }
+                                  : dial.timing.cardSpring,
+                            } as never}
                           >
                             <img
                               alt={isTopCard ? candidate.album_name ?? candidate.song_name : ""}

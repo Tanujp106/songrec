@@ -5,11 +5,14 @@ import {
   DEFAULT_DISCOVERY_DECK_TUNING,
   DISCOVERY_CHAMBER_REVEAL_DELAY_MS,
   DISCOVERY_CANDIDATE_POOL_SIZE,
+  DISCOVERY_FINDING_TILE_COUNT,
+  getDiscoveryMorphDeckIndex,
   createDiscoveryDeckState,
   enterDiscovery,
   finishDiscovery,
   getActiveSongIndex,
   getDeckCardLayout,
+  getDiscoveryCardMotionPhase,
   getDiscoveryImagePool,
   getDiscoveryGesture,
   getDiscoverySwipeAction,
@@ -37,14 +40,38 @@ test("keeps the four selected covers first while adding a larger candidate pool"
   );
 });
 
-test("uses a loading-screen-sized pool for the discovery chamber", () => {
-  assert.equal(DISCOVERY_CANDIDATE_POOL_SIZE, 24);
+test("uses a dense loading-screen-sized pool for the discovery chamber", () => {
+  assert.equal(DISCOVERY_CANDIDATE_POOL_SIZE, 64);
   assert.equal(
     getDiscoveryImagePool(
       ["pick-a", "pick-b", "pick-c", "pick-d"],
-      Array.from({ length: 30 }, (_, index) => "candidate-" + String(index)),
+      Array.from({ length: 70 }, (_, index) => "candidate-" + String(index)),
     ).length,
-    24,
+    64,
+  );
+});
+
+test("anchors the stack morph in the middle of the finding field", () => {
+  assert.equal(DISCOVERY_FINDING_TILE_COUNT, 36);
+  assert.deepEqual(
+    [14, 15, 20, 21].map(getDiscoveryMorphDeckIndex),
+    [0, 1, 2, 3],
+  );
+  assert.equal(getDiscoveryMorphDeckIndex(0), null);
+});
+
+test("marks the departed card as an instant re-entry when it is put behind the stack", () => {
+  assert.equal(
+    getDiscoveryCardMotionPhase({ index: 0, departingDeckIndex: null, reenteringDeckIndex: 0 }),
+    "reentering",
+  );
+  assert.equal(
+    getDiscoveryCardMotionPhase({ index: 0, departingDeckIndex: 0, reenteringDeckIndex: 0 }),
+    "departing",
+  );
+  assert.equal(
+    getDiscoveryCardMotionPhase({ index: 1, departingDeckIndex: 0, reenteringDeckIndex: null }),
+    "stack",
   );
 });
 

@@ -2,7 +2,10 @@ export const DISCOVERY_SWIPE_THRESHOLD_PX = 72;
 export const DISCOVERY_FINDING_DURATION_MS = 1400;
 export const DISCOVERY_CHAMBER_REVEAL_DELAY_MS = 1300;
 export const DISCOVERY_MAX_SONGS = 4;
-export const DISCOVERY_CANDIDATE_POOL_SIZE = 24;
+export const DISCOVERY_CANDIDATE_POOL_SIZE = 64;
+export const DISCOVERY_FINDING_TILE_COUNT = 36;
+export const DISCOVERY_FINDING_GRID_COLUMNS = 6;
+export const DISCOVERY_MORPH_SOURCE_INDICES = [14, 15, 20, 21] as const;
 
 export interface DiscoveryDeckTuning {
   stackX: number;
@@ -23,6 +26,7 @@ export const DEFAULT_DISCOVERY_DECK_TUNING: DiscoveryDeckTuning = {
 export type DiscoveryView = "primary" | "finding" | "deck";
 export type DiscoveryGesture = "next" | "previous" | null;
 export type DiscoverySwipeAction = "advance" | "return" | null;
+export type DiscoveryCardMotionPhase = "stack" | "departing" | "reentering";
 
 export interface DiscoveryDeckState {
   view: DiscoveryView;
@@ -75,6 +79,25 @@ export function getDiscoveryImagePool(
   maxImages = DISCOVERY_CANDIDATE_POOL_SIZE,
 ): string[] {
   return Array.from(new Set([...selectedImages, ...candidateImages].filter(Boolean))).slice(0, maxImages);
+}
+
+export function getDiscoveryMorphDeckIndex(tileIndex: number): number | null {
+  const deckIndex = DISCOVERY_MORPH_SOURCE_INDICES.indexOf(tileIndex as (typeof DISCOVERY_MORPH_SOURCE_INDICES)[number]);
+  return deckIndex === -1 ? null : deckIndex;
+}
+
+export function getDiscoveryCardMotionPhase({
+  index,
+  departingDeckIndex,
+  reenteringDeckIndex,
+}: {
+  index: number;
+  departingDeckIndex: number | null;
+  reenteringDeckIndex: number | null;
+}): DiscoveryCardMotionPhase {
+  if (departingDeckIndex === index) return "departing";
+  if (reenteringDeckIndex === index) return "reentering";
+  return "stack";
 }
 
 export function getDiscoveryGesture({
