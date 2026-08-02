@@ -6,7 +6,6 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react";
 import {
   AnimatePresence,
@@ -14,7 +13,6 @@ import {
   motion,
   useMotionValue,
   useReducedMotion,
-  useTransform,
 } from "motion/react";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
@@ -22,7 +20,6 @@ import type { SongRecommendation } from "../lib/api";
 import {
   createDiscoveryDeckState,
   DISCOVERY_ARTWORK_DRAG_MAX_TRAVEL_PX,
-  DISCOVERY_DRAG_MAX_TRAVEL_PX,
   DISCOVERY_FINDING_GRID_COLUMNS,
   DISCOVERY_FINDING_TILE_COUNT,
   DISCOVERY_MORPH_SOURCE_INDICES,
@@ -32,10 +29,6 @@ import {
   getDiscoveryArtworkDragOffset,
   getDiscoveryArtworkReleaseVelocity,
   getDiscoveryArtworkScale,
-  getDiscoveryBackCardLayout,
-  getDiscoveryCardDragOffset,
-  getDiscoveryCardMotionPhase,
-  getDiscoveryCardZIndex,
   getDeckCardLayout,
   getDiscoveryGesture,
   getDiscoveryImagePool,
@@ -48,6 +41,7 @@ import {
   sendDiscoveryCardToBack,
   type DiscoveryGesture,
 } from "../lib/discovery-deck";
+import { DiscoveryCardStack } from "./DiscoveryCardStack";
 import {
   RESULT_ACTION_HEIGHT,
   RESULT_CONTENT_REVEAL_DELAY_MS,
@@ -73,25 +67,14 @@ const DISCOVERY_PANEL_SPRING = {
   damping: 38,
   mass: 1,
 };
-const DISCOVERY_CARD_SPRING = {
-  type: "spring" as const,
-  visualDuration: 0.2,
-  bounce: 0.05,
-};
 const DISCOVERY_STACK_TUNING = {
   x: 8,
   y: 4,
   rotate: 7,
   scaleStep: 0.02,
   opacityStep: 0,
-  shadowBlur: 34,
 };
 const DISCOVERY_SWIPE_THRESHOLD_PX = 36;
-const DISCOVERY_CARD_TO_BACK_SPRING = {
-  type: "spring" as const,
-  visualDuration: 0.32,
-  bounce: 0.06,
-};
 const DISCOVERY_ARTWORK_RETURN_SPRING = {
   type: "spring" as const,
   stiffness: 300,
@@ -163,77 +146,6 @@ function updateGestureVelocity(
   gesture.lastX = clientX;
   gesture.lastY = clientY;
   gesture.lastTime = timeStamp;
-}
-
-function DiscoveryDraggableCard({
-  canDrag,
-  children,
-  onSendToBack,
-  swipeThresholdPx,
-}: {
-  canDrag: boolean;
-  children: ReactNode;
-  onSendToBack: (direction: DiscoveryGesture) => void;
-  swipeThresholdPx: number;
-}) {
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const scale = useMotionValue(1);
-  const rotateX = useTransform(
-    y,
-    [-DISCOVERY_DRAG_MAX_TRAVEL_PX, DISCOVERY_DRAG_MAX_TRAVEL_PX],
-    [3, -3],
-  );
-  const rotateY = useTransform(
-    x,
-    [-DISCOVERY_DRAG_MAX_TRAVEL_PX, DISCOVERY_DRAG_MAX_TRAVEL_PX],
-    [-3, 3],
-  );
-
-  return (
-    <motion.div
-      className="absolute inset-0"
-      drag={canDrag}
-      dragMomentum={false}
-      onDrag={canDrag ? (_, info) => {
-        const offset = getDiscoveryCardDragOffset(info.offset.x, info.offset.y);
-        x.set(offset.x);
-        y.set(offset.y);
-        scale.set(getDiscoveryArtworkScale(info.offset.x, info.offset.y));
-      } : undefined}
-      onDragEnd={canDrag ? (_, info) => {
-        const direction = getDiscoveryGesture({
-          startX: 0,
-          endX: info.offset.x,
-          startY: 0,
-          endY: info.offset.y,
-        }, swipeThresholdPx);
-        animateMotion(x, 0, {
-          ...DISCOVERY_ARTWORK_RETURN_SPRING,
-          velocity: getDiscoveryArtworkReleaseVelocity(info.velocity.x),
-        });
-        animateMotion(y, 0, {
-          ...DISCOVERY_ARTWORK_RETURN_SPRING,
-          velocity: getDiscoveryArtworkReleaseVelocity(info.velocity.y),
-        });
-        animateMotion(scale, 1, DISCOVERY_ARTWORK_RETURN_SPRING);
-        if (direction !== null) onSendToBack(direction);
-      } : undefined}
-      onPointerDown={(event) => {
-        if (canDrag) event.stopPropagation();
-      }}
-      style={{
-        rotateX,
-        rotateY,
-        scale,
-        touchAction: canDrag ? "none" : undefined,
-        x,
-        y,
-      }}
-    >
-      {children}
-    </motion.div>
-  );
 }
 
 function FindingAnimation({
@@ -380,8 +292,8 @@ export function SongResult({
   const candidateImages = getDiscoveryImagePool(selectedImages, albumImages);
   const [deckState, setDeckState] = useState(createDiscoveryDeckState);
   const [deckOrder, setDeckOrder] = useState<number[]>(() => []);
-  const [departingDeckIndex, setDepartingDeckIndex] = useState<number | null>(null);
-  const [reenteringDeckIndex, setReenteringDeckIndex] = useState<number | null>(null);
+  const [cyclingDeckIndex, setCyclingDeckIndex] = useState<number | null>(null);
+  const [cyclingDeckDirection, setCyclingDeckDirection] = useState<Exclude<DiscoveryGesture, null> | null>(null);
   const [isDiscoveryMorphing, setIsDiscoveryMorphing] = useState(false);
   const [morphCapture, setMorphCapture] = useState<DiscoveryMorphCapture | null>(null);
   const [isChamberRevealed, setIsChamberRevealed] = useState(false);
@@ -444,21 +356,13 @@ export function SongResult({
   useEffect(() => {
     setDeckState(createDiscoveryDeckState());
     setDeckOrder(discoverySongs.map((_, index) => index));
-    setDepartingDeckIndex(null);
-    setReenteringDeckIndex(null);
+    setCyclingDeckIndex(null);
+    setCyclingDeckDirection(null);
     setIsDiscoveryMorphing(false);
     setMorphCapture(null);
     setIsResultContentRevealed(false);
     gestureRef.current = null;
   }, [discoverySongs.length, songs]);
-
-  useEffect(() => {
-    if (reenteringDeckIndex === null) return;
-    const frame = window.requestAnimationFrame(() => {
-      setReenteringDeckIndex(null);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [reenteringDeckIndex]);
 
   useEffect(() => {
     if (!isFinding || shouldReduceMotion) return;
@@ -553,8 +457,9 @@ export function SongResult({
 
   const enterOrAdvance = useCallback((
     cardIndex = visibleDeckOrder[0] ?? deckState.deckIndex,
+    direction: Exclude<DiscoveryGesture, null> = "next",
   ) => {
-    if (!hasDiscovery || isFinding || departingDeckIndex !== null) return;
+    if (!hasDiscovery || isFinding || cyclingDeckIndex !== null) return;
 
     if (isPrimary) {
       setDeckState((state) => enterDiscovery(state, discoverySongs.length));
@@ -572,10 +477,11 @@ export function SongResult({
       ...state,
       deckIndex: nextOrder[0] ?? state.deckIndex,
     }));
-    setDepartingDeckIndex(cardIndex);
+    setCyclingDeckDirection(direction);
+    setCyclingDeckIndex(cardIndex);
   }, [
     deckState.deckIndex,
-    departingDeckIndex,
+    cyclingDeckIndex,
     discoverySongs.length,
     hasDiscovery,
     isFinding,
@@ -587,7 +493,8 @@ export function SongResult({
 
   const goBackToPrimary = useCallback(() => {
     if (isPrimary) return;
-    setDepartingDeckIndex(null);
+    setCyclingDeckIndex(null);
+    setCyclingDeckDirection(null);
     setIsDiscoveryMorphing(false);
     setDeckState((state) => returnToPrimary(state));
   }, [isPrimary]);
@@ -614,7 +521,7 @@ export function SongResult({
   }, [resetPrimaryArtworkDrag]);
 
   const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || departingDeckIndex !== null) return;
+    if (event.button !== 0 || cyclingDeckIndex !== null) return;
     const chamber = chamberRef.current?.getBoundingClientRect();
     const startsInsideChamber = chamber !== undefined && isDiscoveryPointInsideChamber(
       { x: event.clientX, y: event.clientY },
@@ -637,7 +544,7 @@ export function SongResult({
       startsInsidePrimaryArtwork,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
-  }, [departingDeckIndex, isPrimary]);
+  }, [cyclingDeckIndex, isPrimary]);
 
   const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const gesture = gestureRef.current;
@@ -682,8 +589,10 @@ export function SongResult({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     resetGesture();
-    commitGesture(direction, gesture.startsInsideChamber);
-  }, [commitGesture, resetGesture]);
+    // The active card owns in-stack gestures and stops propagation. Any deck
+    // gesture that reaches this parent began in the exposed border area.
+    commitGesture(direction, isDeck ? false : gesture.startsInsideChamber);
+  }, [commitGesture, isDeck, resetGesture]);
 
   const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowRight") {
@@ -696,11 +605,10 @@ export function SongResult({
     }
   }, [enterOrAdvance, goBackToPrimary]);
 
-  const completeDeckShuffle = useCallback((index: number) => {
-    if (departingDeckIndex !== index) return;
-    setReenteringDeckIndex(index);
-    setDepartingDeckIndex(null);
-  }, [departingDeckIndex]);
+  const completeDeckCycle = useCallback((index: number) => {
+    setCyclingDeckIndex((current) => current === index ? null : current);
+    setCyclingDeckDirection(null);
+  }, []);
 
   return (
     <div
@@ -920,107 +828,30 @@ export function SongResult({
                   )}
 
                   {isDeck && !isDiscoveryMorphing && (
-                    <motion.div
+                    <DiscoveryCardStack
+                      borderRadiusPx={DISCOVERY_RADIUS_PX}
+                      cardInsetPercent={DISCOVERY_CARD_INSET_PERCENT}
+                      cyclingCardIndex={cyclingDeckIndex}
+                      cyclingDirection={cyclingDeckDirection}
+                      items={discoverySongs.map((candidate, index) => ({
+                        id: candidate.spotify_url ?? candidate.song_name + "-" + String(index),
+                        image: candidate.album_image ?? imgAlbum,
+                        alt: candidate.album_name ?? candidate.song_name,
+                      }))}
                       key="deck"
-                      className="absolute inset-0"
-                      data-slot="discovery-deck"
-                      initial={{ opacity: 1 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }}
-                      style={{ perspective: 600 }}
-                    >
-                      {discoverySongs.map((candidate, index) => {
-                        const position = visibleDeckOrder.indexOf(index);
-                        const layout = getDeckCardLayout(position, {
-                          stackX: DISCOVERY_STACK_TUNING.x,
-                          stackY: DISCOVERY_STACK_TUNING.y,
-                          stackRotate: DISCOVERY_STACK_TUNING.rotate,
-                          stackScaleStep: DISCOVERY_STACK_TUNING.scaleStep,
-                          stackOpacityStep: DISCOVERY_STACK_TUNING.opacityStep,
-                        });
-                        const isTopCard = position === 0;
-                        const motionPhase = getDiscoveryCardMotionPhase({
-                          index,
-                          departingDeckIndex,
-                          reenteringDeckIndex,
-                        });
-                        const departingLayout = getDiscoveryBackCardLayout(
-                          discoverySongs.length,
-                          {
-                            stackX: DISCOVERY_STACK_TUNING.x,
-                            stackY: DISCOVERY_STACK_TUNING.y,
-                            stackRotate: DISCOVERY_STACK_TUNING.rotate,
-                            stackScaleStep: DISCOVERY_STACK_TUNING.scaleStep,
-                            stackOpacityStep: DISCOVERY_STACK_TUNING.opacityStep,
-                          },
-                        );
-                        const candidateKey = candidate.spotify_url ??
-                          candidate.song_name + "-" + String(index);
-
-                        return (
-                          <motion.div
-                            key={candidateKey}
-                            className="absolute"
-                            data-active={isTopCard ? "true" : "false"}
-                            data-slot="discovery-card"
-                            style={{
-                              inset: String(DISCOVERY_CARD_INSET_PERCENT) + "%",
-                              borderRadius: DISCOVERY_RADIUS_PX,
-                              zIndex: getDiscoveryCardZIndex(
-                                position,
-                                discoverySongs.length,
-                                motionPhase === "departing",
-                              ),
-                              willChange: "transform, opacity",
-                              boxShadow: "0 18px " + DISCOVERY_STACK_TUNING.shadowBlur + "px rgba(23,16,39,0.22)",
-                            }}
-                          >
-                            <DiscoveryDraggableCard
-                              canDrag={isDeck && departingDeckIndex === null && !shouldReduceMotion}
-                              onSendToBack={() => enterOrAdvance(index)}
-                              swipeThresholdPx={DISCOVERY_SWIPE_THRESHOLD_PX}
-                            >
-                              <motion.div
-                                animate={motionPhase === "departing"
-                                  ? {
-                                      x: departingLayout.x,
-                                      y: departingLayout.y,
-                                      rotate: departingLayout.rotate,
-                                      scale: departingLayout.scale,
-                                      opacity: departingLayout.opacity,
-                                    }
-                                  : {
-                                      x: layout.x,
-                                      y: layout.y,
-                                      rotate: layout.rotate,
-                                      scale: layout.scale,
-                                      opacity: layout.opacity,
-                                    }}
-                                className="absolute inset-0 overflow-hidden"
-                                style={{ borderRadius: DISCOVERY_RADIUS_PX }}
-                                onAnimationComplete={() => completeDeckShuffle(index)}
-                                transition={{
-                                  default: shouldReduceMotion || motionPhase === "reentering"
-                                    ? { duration: 0 }
-                                    : departingDeckIndex !== null
-                                      ? DISCOVERY_CARD_TO_BACK_SPRING
-                                      : DISCOVERY_CARD_SPRING,
-                                } as never}
-                              >
-                                <img
-                                  alt={isTopCard ? candidate.album_name ?? candidate.song_name : ""}
-                                  className="absolute inset-0 size-full max-w-none object-cover"
-                                  draggable={false}
-                                  src={candidate.album_image ?? imgAlbum}
-                                  style={{ borderRadius: DISCOVERY_RADIUS_PX }}
-                                />
-                              </motion.div>
-                            </DiscoveryDraggableCard>
-                          </motion.div>
-                        );
-                      })}
-                    </motion.div>
+                      onCycle={(cardIndex, direction) => enterOrAdvance(cardIndex, direction)}
+                      onCycleComplete={completeDeckCycle}
+                      order={visibleDeckOrder}
+                      shouldReduceMotion={shouldReduceMotion}
+                      swipeThresholdPx={DISCOVERY_SWIPE_THRESHOLD_PX}
+                      tuning={{
+                        stackX: DISCOVERY_STACK_TUNING.x,
+                        stackY: DISCOVERY_STACK_TUNING.y,
+                        stackRotate: DISCOVERY_STACK_TUNING.rotate,
+                        stackScaleStep: DISCOVERY_STACK_TUNING.scaleStep,
+                        stackOpacityStep: DISCOVERY_STACK_TUNING.opacityStep,
+                      }}
+                    />
                   )}
                 </AnimatePresence>
               </motion.div>

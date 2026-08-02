@@ -15,18 +15,16 @@ import {
   finishDiscovery,
   getActiveSongIndex,
   getDeckCardLayout,
-  getDiscoveryCardMotionPhase,
   getDiscoveryDragOffset,
   getDiscoveryCardDragOffset,
   getDiscoveryArtworkDragOffset,
   getDiscoveryArtworkReleaseVelocity,
   getDiscoveryArtworkScale,
-  getDiscoveryBackCardLayout,
-  getDiscoveryExitTravel,
   getDiscoveryImagePool,
   getDiscoveryMorphSourceImage,
   getDiscoveryGesture,
-  getDiscoveryCardZIndex,
+  getDiscoveryStackCardState,
+  getDiscoveryStackCycleState,
   isDiscoveryPointInsideChamber,
   getDiscoverySwipeAction,
   getDiscoverySongs,
@@ -101,45 +99,58 @@ test("maps a morph source rectangle into a stable stacked-card target", () => {
   );
 });
 
-test("marks the departed card as re-entering when it is put behind the stack", () => {
-  assert.equal(
-    getDiscoveryCardMotionPhase({ index: 0, departingDeckIndex: null, reenteringDeckIndex: 0 }),
-    "reentering",
-  );
-  assert.equal(
-    getDiscoveryCardMotionPhase({ index: 0, departingDeckIndex: 0, reenteringDeckIndex: 0 }),
-    "departing",
-  );
-  assert.equal(
-    getDiscoveryCardMotionPhase({ index: 1, departingDeckIndex: 0, reenteringDeckIndex: null }),
-    "stack",
-  );
-});
-
-test("targets the real back-of-stack layout during a card departure", () => {
-  const back = getDiscoveryBackCardLayout(4, {
+test("models a persistent stack cycle without exposing another draggable card", () => {
+  const tuning = {
     stackX: 8,
     stackY: 4,
     stackRotate: 7,
     stackScaleStep: 0.02,
     stackOpacityStep: 0,
+  };
+
+  assert.deepEqual(getDiscoveryStackCardState(0, 4, false, false, tuning), {
+    ...getDeckCardLayout(0, tuning),
+    zIndex: 4,
+    canDrag: true,
   });
-
-  assert.deepEqual(back, getDeckCardLayout(3, {
-    stackX: 8,
-    stackY: 4,
-    stackRotate: 7,
-    stackScaleStep: 0.02,
-    stackOpacityStep: 0,
-  }));
-  assert.ok(back.x > 0);
-  assert.ok(back.y < 0);
-  assert.ok(back.scale < 1);
+  assert.deepEqual(getDiscoveryStackCardState(3, 4, true, true, tuning), {
+    ...getDeckCardLayout(3, tuning),
+    zIndex: 5,
+    canDrag: false,
+  });
+  assert.equal(getDiscoveryStackCardState(0, 4, false, true, tuning).canDrag, false);
 });
 
-test("keeps the departing card above the advancing stack", () => {
-  assert.ok(getDiscoveryCardZIndex(3, 4, true) > getDiscoveryCardZIndex(0, 4, false));
-  assert.equal(getDiscoveryCardZIndex(3, 4, false), 1);
+test("threads the front card around the swipe side before settling behind the stack", () => {
+  const backLayout = {
+    x: 12,
+    y: -12,
+    rotate: 6,
+    scale: 0.94,
+    opacity: 1,
+  };
+
+  assert.deepEqual(getDiscoveryStackCycleState("previous", "lift", backLayout, 4), {
+    x: 24,
+    y: 2,
+    rotate: 5,
+    scale: 0.985,
+    opacity: 1,
+    zIndex: 5,
+  });
+  assert.deepEqual(getDiscoveryStackCycleState("next", "lift", backLayout, 4), {
+    x: -24,
+    y: 2,
+    rotate: -5,
+    scale: 0.985,
+    opacity: 1,
+    zIndex: 5,
+  });
+  assert.deepEqual(getDiscoveryStackCycleState("previous", "settle", backLayout, 4), {
+    ...backLayout,
+    opacity: 1,
+    zIndex: 1,
+  });
 });
 
 test("requires a deliberate horizontal swipe to change discovery state", () => {
@@ -166,14 +177,6 @@ test("routes right swipes by their start region while viewing the deck", () => {
   assert.equal(getDiscoverySwipeAction("previous", "deck", false), "return");
   assert.equal(getDiscoverySwipeAction("next", "deck", false), "advance");
   assert.equal(getDiscoverySwipeAction(null, "deck", true), null);
-});
-
-test("stages advancing cards inside the stack in the swipe direction", () => {
-  assert.equal(getDiscoveryExitTravel("next", 12), -12);
-  assert.equal(getDiscoveryExitTravel("previous", 12), 12);
-  assert.equal(getDiscoveryExitTravel("next", 80), -15);
-  assert.equal(getDiscoveryExitTravel("previous", 80), 15);
-  assert.equal(getDiscoveryExitTravel(null, 24), 0);
 });
 
 test("adds progressive resistance as the live card drag reaches its radius", () => {

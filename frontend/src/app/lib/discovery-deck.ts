@@ -34,9 +34,8 @@ export const DEFAULT_DISCOVERY_DECK_TUNING: DiscoveryDeckTuning = {
 export type DiscoveryView = "primary" | "finding" | "deck";
 export type DiscoveryGesture = "next" | "previous" | null;
 export type DiscoverySwipeAction = "advance" | "return" | null;
-export type DiscoveryCardMotionPhase = "stack" | "departing" | "reentering";
+export type DiscoveryStackCyclePhase = "lift" | "settle";
 
-const DISCOVERY_MAX_INTERNAL_EXIT_TRAVEL_PERCENT = 15;
 const DISCOVERY_DRAG_RESISTANCE = 1.75;
 
 export interface DiscoveryDeckState {
@@ -75,6 +74,15 @@ export interface DeckCardLayout {
   rotate: number;
   scale: number;
   opacity: number;
+}
+
+export interface DiscoveryStackCardState extends DeckCardLayout {
+  zIndex: number;
+  canDrag: boolean;
+}
+
+export interface DiscoveryStackCycleState extends DeckCardLayout {
+  zIndex: number;
 }
 
 export interface DiscoveryMorphTargetFrame {
@@ -161,20 +169,6 @@ export function getDiscoveryMorphTargetFrame(
     rotate: layout.rotate,
     opacity: layout.opacity,
   };
-}
-
-export function getDiscoveryCardMotionPhase({
-  index,
-  departingDeckIndex,
-  reenteringDeckIndex,
-}: {
-  index: number;
-  departingDeckIndex: number | null;
-  reenteringDeckIndex: number | null;
-}): DiscoveryCardMotionPhase {
-  if (departingDeckIndex === index) return "departing";
-  if (reenteringDeckIndex === index) return "reentering";
-  return "stack";
 }
 
 export function getDiscoveryGesture({
@@ -277,18 +271,6 @@ export function getDiscoverySwipeAction(
   return "return";
 }
 
-export function getDiscoveryExitTravel(
-  gesture: DiscoveryGesture,
-  requestedPercent: number,
-): number {
-  if (gesture === null) return 0;
-  const travel = Math.max(
-    0,
-    Math.min(DISCOVERY_MAX_INTERNAL_EXIT_TRAVEL_PERCENT, Math.abs(requestedPercent)),
-  );
-  return gesture === "next" ? -travel : travel;
-}
-
 export function enterDiscovery(
   state: DiscoveryDeckState,
   discoverySongCount: number,
@@ -373,18 +355,43 @@ export function getDeckCardLayout(
   };
 }
 
-export function getDiscoveryBackCardLayout(
-  cardCount: number,
-  tuning: DiscoveryDeckTuning = DEFAULT_DISCOVERY_DECK_TUNING,
-): DeckCardLayout {
-  return getDeckCardLayout(Math.max(0, cardCount - 1), tuning);
-}
-
-export function getDiscoveryCardZIndex(
+export function getDiscoveryStackCardState(
   position: number,
   cardCount: number,
-  isDeparting: boolean,
-): number {
-  if (isDeparting) return Math.max(1, cardCount + 1);
-  return Math.max(1, cardCount - Math.max(0, position));
+  isCyclingCard: boolean,
+  isCycleActive: boolean,
+  tuning: DiscoveryDeckTuning = DEFAULT_DISCOVERY_DECK_TUNING,
+): DiscoveryStackCardState {
+  return {
+    ...getDeckCardLayout(position, tuning),
+    zIndex: isCyclingCard
+      ? Math.max(1, cardCount + 1)
+      : Math.max(1, cardCount - Math.max(0, position)),
+    canDrag: position === 0 && !isCycleActive,
+  };
+}
+
+export function getDiscoveryStackCycleState(
+  direction: Exclude<DiscoveryGesture, null>,
+  phase: DiscoveryStackCyclePhase,
+  backLayout: DeckCardLayout,
+  cardCount: number,
+): DiscoveryStackCycleState {
+  if (phase === "settle") {
+    return {
+      ...backLayout,
+      opacity: 1,
+      zIndex: 1,
+    };
+  }
+
+  const side = direction === "previous" ? 1 : -1;
+  return {
+    x: side * 24,
+    y: 2,
+    rotate: side * 5,
+    scale: 0.985,
+    opacity: 1,
+    zIndex: Math.max(1, cardCount + 1),
+  };
 }
