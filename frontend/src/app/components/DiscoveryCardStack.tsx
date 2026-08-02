@@ -28,13 +28,13 @@ const STACK_SPRING = {
 };
 
 const CYCLE_LIFT_TRANSITION = {
-  duration: 0.09,
+  duration: 0.14,
   ease: [0.2, 0.8, 0.2, 1] as const,
 };
 
 const CYCLE_SETTLE_SPRING = {
   type: "spring" as const,
-  visualDuration: 0.14,
+  visualDuration: 0.3,
   bounce: 0.02,
 };
 
@@ -226,6 +226,7 @@ export function DiscoveryCardStack({
       exit={{ opacity: 0 }}
       initial={{ opacity: 1 }}
       transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }}
+      style={{ paddingInline: "24px" }}
     >
       {items.map((item, cardIndex) => {
         const position = Math.max(0, visibleOrder.indexOf(cardIndex));

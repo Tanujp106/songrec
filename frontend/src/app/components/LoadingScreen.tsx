@@ -411,7 +411,7 @@ export function LoadingScreen({
   };
 
   return (
-    <div className="w-screen flex flex-col items-center flex-1 pt-[16px] sm:pt-[24px]">
+    <div className="w-screen flex flex-col items-center flex-1 pt-[32px] sm:pt-[40px]">
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 0.3; }

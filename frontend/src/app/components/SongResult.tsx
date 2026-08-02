@@ -29,6 +29,7 @@ import {
   getDiscoveryArtworkDragOffset,
   getDiscoveryArtworkReleaseVelocity,
   getDiscoveryArtworkScale,
+  getDiscoveryChamberHintMotion,
   getDeckCardLayout,
   getDiscoveryGesture,
   getDiscoveryImagePool,
@@ -51,6 +52,8 @@ import {
 } from "../lib/detail-motion";
 
 const RESULT_MAX_WIDTH = "min(100%, 1120px)";
+const RESULT_TOP_PADDING_PX = 24;
+const DISCOVERY_SIDE_PADDING_PX = 24;
 const DISCOVERY_CARD_SIZE = "min(80vw, 55svh, 560px, max(180px, calc(100dvh - 420px)))";
 const DISCOVERY_TOP_GAP_PX = 40;
 const DISCOVERY_DETAIL_GAP_PX = 12;
@@ -349,6 +352,7 @@ export function SongResult({
   const isDeck = deckState.view === "deck";
   const showFinding = isFinding || isDiscoveryMorphing;
   const hasDiscovery = discoverySongs.length > 0;
+  const chamberHintMotion = getDiscoveryChamberHintMotion(shouldReduceMotion, isPrimary);
   const description = isPrimary
     ? "Here's a perfect " + mood + " song for you"
     : "More " + mood + " songs you might like";
@@ -613,7 +617,11 @@ export function SongResult({
   return (
     <div
       className="relative mx-auto flex-1 min-h-0 touch-pan-y"
-      style={{ width: RESULT_MAX_WIDTH }}
+      style={{
+        width: RESULT_MAX_WIDTH,
+        paddingTop: String(RESULT_TOP_PADDING_PX) + "px",
+        boxSizing: "border-box",
+      }}
     >
       <div
         className="relative z-10 flex h-full min-h-0 w-full flex-1 flex-col items-center justify-between"
@@ -674,7 +682,7 @@ export function SongResult({
           >
             <div
               className="absolute inset-0 flex items-center justify-center"
-              style={{ paddingInline: "20px" }}
+              style={{ paddingInline: String(DISCOVERY_SIDE_PADDING_PX) + "px" }}
             >
               <motion.div
                 className="relative aspect-square"
@@ -725,10 +733,20 @@ export function SongResult({
                 }}
                 animate={{
                   left: isPrimary ? "calc(100% - " + DISCOVERY_CHAMBER_PEEK_PX + "px)" : "50%",
-                  x: isPrimary ? "0%" : "-50%",
+                  x: isPrimary ? chamberHintMotion.x : "-50%",
                   opacity: 1,
                 }}
-                transition={shouldReduceMotion ? { duration: 0 } : DISCOVERY_PANEL_SPRING}
+                transition={
+                  shouldReduceMotion
+                    ? { duration: 0 }
+                    : isPrimary
+                      ? {
+                          left: DISCOVERY_PANEL_SPRING,
+                          default: chamberHintMotion.transition,
+                          opacity: { duration: 0.18, ease: "easeOut" },
+                        }
+                      : DISCOVERY_PANEL_SPRING
+                }
                 style={{
                   width: cardSize,
                   borderRadius: DISCOVERY_RADIUS_PX,

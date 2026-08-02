@@ -4,6 +4,10 @@ import test from "node:test";
 import {
   DEFAULT_DISCOVERY_DECK_TUNING,
   DISCOVERY_CHAMBER_REVEAL_DELAY_MS,
+  DISCOVERY_CHAMBER_HINT_DELAY_MS,
+  DISCOVERY_CHAMBER_HINT_DURATION_MS,
+  DISCOVERY_CHAMBER_HINT_INTERVAL_MS,
+  DISCOVERY_CHAMBER_HINT_TRAVEL_PX,
   DISCOVERY_CANDIDATE_POOL_SIZE,
   DISCOVERY_ARTWORK_DRAG_MAX_TRAVEL_PX,
   DISCOVERY_DRAG_MAX_TRAVEL_PX,
@@ -22,6 +26,7 @@ import {
   getDiscoveryArtworkScale,
   getDiscoveryImagePool,
   getDiscoveryMorphSourceImage,
+  getDiscoveryChamberHintMotion,
   getDiscoveryGesture,
   getDiscoveryStackCardState,
   getDiscoveryStackCycleState,
@@ -35,6 +40,23 @@ import {
 
 test("keeps the secondary discovery chamber hidden for 1.3 seconds", () => {
   assert.equal(DISCOVERY_CHAMBER_REVEAL_DELAY_MS, 1300);
+});
+
+test("repeats the dotted chamber swipe hint every 3.6 seconds", () => {
+  const motion = getDiscoveryChamberHintMotion(false, true);
+
+  assert.deepEqual(motion.x, [0, -DISCOVERY_CHAMBER_HINT_TRAVEL_PX, 0]);
+  assert.equal(motion.transition.duration, DISCOVERY_CHAMBER_HINT_DURATION_MS / 1000);
+  assert.equal(motion.transition.delay, DISCOVERY_CHAMBER_HINT_DELAY_MS / 1000);
+  assert.equal(
+    motion.transition.repeatDelay,
+    (DISCOVERY_CHAMBER_HINT_INTERVAL_MS - DISCOVERY_CHAMBER_HINT_DURATION_MS) / 1000,
+  );
+});
+
+test("disables the dotted chamber swipe hint for reduced motion and non-primary views", () => {
+  assert.deepEqual(getDiscoveryChamberHintMotion(true, true), { x: 0 });
+  assert.deepEqual(getDiscoveryChamberHintMotion(false, false), { x: 0 });
 });
 
 test("limits discovery to four songs after the primary recommendation", () => {
@@ -149,7 +171,7 @@ test("threads the front card around the swipe side before settling behind the st
   assert.deepEqual(getDiscoveryStackCycleState("previous", "settle", backLayout, 4), {
     ...backLayout,
     opacity: 1,
-    zIndex: 1,
+    zIndex: 5,
   });
 });
 

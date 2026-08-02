@@ -3,6 +3,10 @@ import { RESULT_CONTENT_REVEAL_DELAY_MS } from "./detail-motion";
 export const DISCOVERY_SWIPE_THRESHOLD_PX = 72;
 export const DISCOVERY_FINDING_DURATION_MS = 1400;
 export const DISCOVERY_CHAMBER_REVEAL_DELAY_MS = RESULT_CONTENT_REVEAL_DELAY_MS;
+export const DISCOVERY_CHAMBER_HINT_DELAY_MS = 650;
+export const DISCOVERY_CHAMBER_HINT_DURATION_MS = 900;
+export const DISCOVERY_CHAMBER_HINT_INTERVAL_MS = 3600;
+export const DISCOVERY_CHAMBER_HINT_TRAVEL_PX = 14;
 export const DISCOVERY_MAX_SONGS = 4;
 export const DISCOVERY_CANDIDATE_POOL_SIZE = 64;
 export const DISCOVERY_FINDING_TILE_COUNT = 36;
@@ -35,6 +39,25 @@ export type DiscoveryView = "primary" | "finding" | "deck";
 export type DiscoveryGesture = "next" | "previous" | null;
 export type DiscoverySwipeAction = "advance" | "return" | null;
 export type DiscoveryStackCyclePhase = "lift" | "settle";
+
+export function getDiscoveryChamberHintMotion(
+  reducedMotion: boolean,
+  isPrimary: boolean,
+) {
+  if (reducedMotion || !isPrimary) return { x: 0 };
+
+  return {
+    x: [0, -DISCOVERY_CHAMBER_HINT_TRAVEL_PX, 0],
+    transition: {
+      duration: DISCOVERY_CHAMBER_HINT_DURATION_MS / 1000,
+      delay: DISCOVERY_CHAMBER_HINT_DELAY_MS / 1000,
+      repeat: Infinity,
+      repeatDelay: (DISCOVERY_CHAMBER_HINT_INTERVAL_MS - DISCOVERY_CHAMBER_HINT_DURATION_MS) / 1000,
+      ease: "easeInOut" as const,
+      times: [0, 0.42, 1],
+    },
+  };
+}
 
 const DISCOVERY_DRAG_RESISTANCE = 1.75;
 
@@ -381,7 +404,7 @@ export function getDiscoveryStackCycleState(
     return {
       ...backLayout,
       opacity: 1,
-      zIndex: 1,
+      zIndex: Math.max(1, cardCount + 1),
     };
   }
 
