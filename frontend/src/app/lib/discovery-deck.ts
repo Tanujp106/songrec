@@ -6,6 +6,12 @@ export const DISCOVERY_CANDIDATE_POOL_SIZE = 64;
 export const DISCOVERY_FINDING_TILE_COUNT = 36;
 export const DISCOVERY_FINDING_GRID_COLUMNS = 6;
 export const DISCOVERY_MORPH_SOURCE_INDICES = [14, 15, 20, 21] as const;
+export const DISCOVERY_DRAG_MAX_TRAVEL_PX = 3;
+export const DISCOVERY_ARTWORK_DRAG_MAX_TRAVEL_PX = 3;
+export const DISCOVERY_ARTWORK_DRAG_RESISTANCE = 6;
+export const DISCOVERY_ARTWORK_SCALE_DISTANCE_PX = 250;
+export const DISCOVERY_ARTWORK_MIN_SCALE = 0.94;
+export const DISCOVERY_ARTWORK_MAX_RELEASE_VELOCITY = 240;
 
 export interface DiscoveryDeckTuning {
   stackX: number;
@@ -28,6 +34,9 @@ export type DiscoveryGesture = "next" | "previous" | null;
 export type DiscoverySwipeAction = "advance" | "return" | null;
 export type DiscoveryCardMotionPhase = "stack" | "departing" | "reentering";
 
+const DISCOVERY_MAX_INTERNAL_EXIT_TRAVEL_PERCENT = 15;
+const DISCOVERY_DRAG_RESISTANCE = 1.75;
+
 export interface DiscoveryDeckState {
   view: DiscoveryView;
   deckIndex: number;
@@ -41,11 +50,37 @@ export interface DiscoveryGestureInput {
   endY: number;
 }
 
+export interface DiscoveryPoint {
+  x: number;
+  y: number;
+}
+
+export interface DiscoveryChamberBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+export interface DiscoveryDragOffset {
+  x: number;
+  y: number;
+}
+
 export interface DeckCardLayout {
   x: number;
   y: number;
   rotate: number;
   scale: number;
+  opacity: number;
+}
+
+export interface DiscoveryMorphTargetFrame {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  rotate: number;
   opacity: number;
 }
 
@@ -86,6 +121,46 @@ export function getDiscoveryMorphDeckIndex(tileIndex: number): number | null {
   return deckIndex === -1 ? null : deckIndex;
 }
 
+export function getDiscoveryMorphSourceImage(
+  tileIndex: number,
+  recommendationImages: readonly string[],
+  fallbackImage: string,
+): string | null {
+  const deckIndex = getDiscoveryMorphDeckIndex(tileIndex);
+  if (deckIndex === null) return null;
+  return recommendationImages[deckIndex] ?? fallbackImage;
+}
+
+export interface DiscoveryMorphTargetFrame {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  rotate: number;
+  opacity: number;
+}
+
+export function getDiscoveryMorphTargetFrame(
+  layout: DeckCardLayout,
+  chamberWidth: number,
+  cardInsetPercent: number,
+): DiscoveryMorphTargetFrame {
+  const inset = Math.max(0, chamberWidth * cardInsetPercent / 100);
+  const baseSize = Math.max(0, chamberWidth - inset * 2);
+  const width = baseSize * layout.scale;
+  const height = baseSize * layout.scale;
+  const round = (value: number) => Number(value.toFixed(4));
+
+  return {
+    left: round(inset + layout.x + (baseSize - width) / 2),
+    top: round(inset + layout.y + (baseSize - height) / 2),
+    width: round(width),
+    height: round(height),
+    rotate: layout.rotate,
+    opacity: layout.opacity,
+  };
+}
+
 export function getDiscoveryCardMotionPhase({
   index,
   departingDeckIndex,
@@ -119,15 +194,97 @@ export function getDiscoveryGesture({
   return deltaX < 0 ? "next" : "previous";
 }
 
+export function isDiscoveryPointInsideChamber(
+  point: DiscoveryPoint,
+  chamber: DiscoveryChamberBounds,
+): boolean {
+  return point.x >= chamber.left &&
+    point.x <= chamber.right &&
+    point.y >= chamber.top &&
+    point.y <= chamber.bottom;
+}
+
+export function getDiscoveryDragOffset(
+  deltaX: number,
+  deltaY: number,
+  maxHorizontalTravelPx: number,
+  maxVerticalTravelPx = maxHorizontalTravelPx,
+  resistance = DISCOVERY_DRAG_RESISTANCE,
+): DiscoveryDragOffset {
+  const clamp = (value: number, limit: number) => {
+    const safeLimit = Math.max(0, limit);
+    if (safeLimit === 0) return 0;
+    const safeResistance = Math.max(1, resistance);
+    return Math.sign(value) * safeLimit * Math.tanh(
+      Math.abs(value) / (safeLimit * safeResistance),
+    );
+  };
+
+  return {
+    x: clamp(deltaX, maxHorizontalTravelPx),
+    y: clamp(deltaY, maxVerticalTravelPx),
+  };
+}
+
+export function getDiscoveryArtworkDragOffset(
+  deltaX: number,
+  deltaY: number,
+): DiscoveryDragOffset {
+  return getDiscoveryDragOffset(
+    deltaX,
+    deltaY,
+    DISCOVERY_ARTWORK_DRAG_MAX_TRAVEL_PX,
+    DISCOVERY_ARTWORK_DRAG_MAX_TRAVEL_PX,
+    DISCOVERY_ARTWORK_DRAG_RESISTANCE,
+  );
+}
+
+export function getDiscoveryCardDragOffset(
+  deltaX: number,
+  deltaY: number,
+): DiscoveryDragOffset {
+  return getDiscoveryArtworkDragOffset(deltaX, deltaY);
+}
+
+export function getDiscoveryArtworkScale(
+  deltaX: number,
+  deltaY: number,
+): number {
+  const progress = Math.min(
+    1,
+    Math.hypot(deltaX, deltaY) / DISCOVERY_ARTWORK_SCALE_DISTANCE_PX,
+  );
+  return 1 - (1 - DISCOVERY_ARTWORK_MIN_SCALE) * progress;
+}
+
+export function getDiscoveryArtworkReleaseVelocity(velocity: number): number {
+  return Math.sign(velocity) * Math.min(
+    Math.abs(velocity),
+    DISCOVERY_ARTWORK_MAX_RELEASE_VELOCITY,
+  );
+}
+
 export function getDiscoverySwipeAction(
   gesture: DiscoveryGesture,
   view: DiscoveryView,
-  startsInsideActiveCard: boolean,
+  startsInsideChamber: boolean,
 ): DiscoverySwipeAction {
   if (gesture === null) return null;
   if (gesture === "next") return "advance";
-  if (view === "deck" && startsInsideActiveCard) return "advance";
+  if (view === "deck" && startsInsideChamber) return "advance";
   return "return";
+}
+
+export function getDiscoveryExitTravel(
+  gesture: DiscoveryGesture,
+  requestedPercent: number,
+): number {
+  if (gesture === null) return 0;
+  const travel = Math.max(
+    0,
+    Math.min(DISCOVERY_MAX_INTERNAL_EXIT_TRAVEL_PERCENT, Math.abs(requestedPercent)),
+  );
+  return gesture === "next" ? -travel : travel;
 }
 
 export function enterDiscovery(
@@ -163,6 +320,15 @@ export function shuffleDiscoveryDeck(
     ...state,
     deckIndex: normalizeIndex(state.deckIndex + 1, discoverySongCount),
   };
+}
+
+export function sendDiscoveryCardToBack(
+  order: readonly number[],
+  cardIndex: number,
+): number[] {
+  const position = order.indexOf(cardIndex);
+  if (position < 0) return [...order];
+  return [...order.slice(0, position), ...order.slice(position + 1), cardIndex];
 }
 
 export function returnToPrimary(

@@ -25,9 +25,6 @@ tsconfig.tsbuildinfo
 *.swo
 *~
 
-# dialkit dev presets
-.dialkit*
-**/dialkit-presets*
 
 # local tooling / agent dirs
 .worktrees/

@@ -5,19 +5,31 @@ import {
   DEFAULT_DISCOVERY_DECK_TUNING,
   DISCOVERY_CHAMBER_REVEAL_DELAY_MS,
   DISCOVERY_CANDIDATE_POOL_SIZE,
+  DISCOVERY_ARTWORK_DRAG_MAX_TRAVEL_PX,
+  DISCOVERY_DRAG_MAX_TRAVEL_PX,
   DISCOVERY_FINDING_TILE_COUNT,
   getDiscoveryMorphDeckIndex,
+  getDiscoveryMorphTargetFrame,
   createDiscoveryDeckState,
   enterDiscovery,
   finishDiscovery,
   getActiveSongIndex,
   getDeckCardLayout,
   getDiscoveryCardMotionPhase,
+  getDiscoveryDragOffset,
+  getDiscoveryCardDragOffset,
+  getDiscoveryArtworkDragOffset,
+  getDiscoveryArtworkReleaseVelocity,
+  getDiscoveryArtworkScale,
+  getDiscoveryExitTravel,
   getDiscoveryImagePool,
+  getDiscoveryMorphSourceImage,
   getDiscoveryGesture,
+  isDiscoveryPointInsideChamber,
   getDiscoverySwipeAction,
   getDiscoverySongs,
   returnToPrimary,
+  sendDiscoveryCardToBack,
   shuffleDiscoveryDeck,
 } from "../frontend/src/app/lib/discovery-deck";
 
@@ -60,6 +72,33 @@ test("anchors the stack morph in the middle of the finding field", () => {
   assert.equal(getDiscoveryMorphDeckIndex(0), null);
 });
 
+test("maps the four morph anchors to the final recommendation covers", () => {
+  const recommendationImages = ["song-a", "song-b", "song-c", "song-d"];
+
+  assert.equal(getDiscoveryMorphSourceImage(14, recommendationImages, "fallback"), "song-a");
+  assert.equal(getDiscoveryMorphSourceImage(15, recommendationImages, "fallback"), "song-b");
+  assert.equal(getDiscoveryMorphSourceImage(21, recommendationImages, "fallback"), "song-d");
+  assert.equal(getDiscoveryMorphSourceImage(0, recommendationImages, "fallback"), null);
+});
+
+test("maps a morph source rectangle into a stable stacked-card target", () => {
+  assert.deepEqual(
+    getDiscoveryMorphTargetFrame(
+      { x: 4, y: -3, rotate: 7, scale: 0.98, opacity: 0.9 },
+      396,
+      12,
+    ),
+    {
+      left: 54.5296,
+      top: 47.5296,
+      width: 294.9408,
+      height: 294.9408,
+      rotate: 7,
+      opacity: 0.9,
+    },
+  );
+});
+
 test("marks the departed card as an instant re-entry when it is put behind the stack", () => {
   assert.equal(
     getDiscoveryCardMotionPhase({ index: 0, departingDeckIndex: null, reenteringDeckIndex: 0 }),
@@ -99,6 +138,93 @@ test("routes right swipes by their start region while viewing the deck", () => {
   assert.equal(getDiscoverySwipeAction("previous", "deck", false), "return");
   assert.equal(getDiscoverySwipeAction("next", "deck", false), "advance");
   assert.equal(getDiscoverySwipeAction(null, "deck", true), null);
+});
+
+test("stages advancing cards inside the stack in the swipe direction", () => {
+  assert.equal(getDiscoveryExitTravel("next", 12), -12);
+  assert.equal(getDiscoveryExitTravel("previous", 12), 12);
+  assert.equal(getDiscoveryExitTravel("next", 80), -15);
+  assert.equal(getDiscoveryExitTravel("previous", 80), 15);
+  assert.equal(getDiscoveryExitTravel(null, 24), 0);
+});
+
+test("adds progressive resistance as the live card drag reaches its radius", () => {
+  const nearOrigin = getDiscoveryDragOffset(4, -4, 18);
+  const nearEdge = getDiscoveryDragOffset(18, -18, 18);
+
+  assert.ok(nearOrigin.x > 2 && nearOrigin.x < 3);
+  assert.ok(nearOrigin.y < -2 && nearOrigin.y > -3);
+  assert.ok(nearEdge.x > 8 && nearEdge.x < 10);
+  assert.ok(nearEdge.y < -8 && nearEdge.y > -10);
+  assert.deepEqual(getDiscoveryDragOffset(-60, 60, 18), {
+    x: -18 * Math.tanh(60 / (18 * 1.75)),
+    y: 18 * Math.tanh(60 / (18 * 1.75)),
+  });
+});
+
+test("keeps the live card inside a tiny three-pixel elastic radius", () => {
+  assert.equal(DISCOVERY_DRAG_MAX_TRAVEL_PX, 3);
+  const offset = getDiscoveryDragOffset(240, -240, DISCOVERY_DRAG_MAX_TRAVEL_PX);
+
+  assert.ok(Math.abs(offset.x) <= 3);
+  assert.ok(Math.abs(offset.y) <= 3);
+  assert.ok(Math.abs(offset.x) > 2.9);
+  assert.ok(Math.abs(offset.y) > 2.9);
+});
+
+test("keeps primary artwork drag tiny with strong progressive resistance", () => {
+  assert.equal(DISCOVERY_ARTWORK_DRAG_MAX_TRAVEL_PX, 3);
+  const nearOrigin = getDiscoveryArtworkDragOffset(4, -4);
+  const nearBoundary = getDiscoveryArtworkDragOffset(40, -40);
+  const hardBoundary = getDiscoveryArtworkDragOffset(240, -240);
+
+  assert.ok(nearOrigin.x > 0 && nearOrigin.x < 0.75);
+  assert.ok(nearOrigin.y < 0 && nearOrigin.y > -0.75);
+  assert.ok(nearBoundary.x > 2.5 && nearBoundary.x < 3);
+  assert.ok(nearBoundary.y < -2.5 && nearBoundary.y > -3);
+  assert.ok(hardBoundary.x > 2.99 && hardBoundary.x <= 3);
+  assert.ok(hardBoundary.y < -2.99 && hardBoundary.y >= -3);
+});
+
+test("uses the same strong progressive resistance for discovery card drags", () => {
+  assert.deepEqual(
+    getDiscoveryCardDragOffset(40, -40),
+    getDiscoveryArtworkDragOffset(40, -40),
+  );
+  const hardBoundary = getDiscoveryCardDragOffset(240, -240);
+  assert.ok(hardBoundary.x > 2.99 && hardBoundary.x <= 3);
+  assert.ok(hardBoundary.y < -2.99 && hardBoundary.y >= -3);
+});
+
+test("adds subtle nonlinear artwork scale and bounded release velocity", () => {
+  assert.equal(getDiscoveryArtworkScale(0, 0), 1);
+  assert.ok(getDiscoveryArtworkScale(20, 0) < 1 && getDiscoveryArtworkScale(20, 0) > 0.99);
+  assert.ok(getDiscoveryArtworkScale(120, 0) < 0.98 && getDiscoveryArtworkScale(120, 0) > 0.96);
+  assert.equal(getDiscoveryArtworkScale(250, 0), 0.94);
+  assert.equal(getDiscoveryArtworkReleaseVelocity(90), 90);
+  assert.equal(getDiscoveryArtworkReleaseVelocity(-90), -90);
+  assert.equal(getDiscoveryArtworkReleaseVelocity(900), 240);
+  assert.equal(getDiscoveryArtworkReleaseVelocity(-900), -240);
+});
+
+test("sends whichever card was dragged to the back of the stack", () => {
+  assert.deepEqual(sendDiscoveryCardToBack([0, 1, 2, 3], 2), [0, 1, 3, 2]);
+  assert.deepEqual(sendDiscoveryCardToBack([0, 1, 2, 3], 0), [1, 2, 3, 0]);
+  assert.deepEqual(sendDiscoveryCardToBack([0, 1, 2, 3], 9), [0, 1, 2, 3]);
+});
+
+test("keeps both in-card swipe directions on the deck advance path", () => {
+  assert.equal(getDiscoverySwipeAction("next", "deck", true), "advance");
+  assert.equal(getDiscoverySwipeAction("previous", "deck", true), "advance");
+  assert.equal(getDiscoverySwipeAction("previous", "deck", false), "return");
+});
+
+test("treats the exposed stack area as inside the discovery chamber", () => {
+  const chamber = { left: 39, top: 181, right: 351, bottom: 493 };
+
+  assert.equal(isDiscoveryPointInsideChamber({ x: 52, y: 330 }, chamber), true);
+  assert.equal(isDiscoveryPointInsideChamber({ x: 351, y: 330 }, chamber), true);
+  assert.equal(isDiscoveryPointInsideChamber({ x: 14, y: 330 }, chamber), false);
 });
 
 test("uses caller-supplied gesture and stack tuning without changing defaults", () => {

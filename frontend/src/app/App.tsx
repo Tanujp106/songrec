@@ -15,7 +15,6 @@ import { Agentation } from "agentation";
 import { Analytics } from "@vercel/analytics/react";
 import { MeasurementScripts } from "./components/MeasurementScripts";
 import { createRequestGuard } from "./lib/request-guard";
-import { DialRoot } from "dialkit";
 
 const RESULT_ACTION_INSET_PX = 24;
 const DEFAULT_FROM = "#5A54F2";
@@ -51,10 +50,6 @@ function mixHex(a: string, b: string, ratio: number): string {
   const bB = parseInt(b.slice(5, 7), 16);
   const toHex = (v: number) => Math.round(v).toString(16).padStart(2, "0");
   return `#${toHex(aR + (bR - aR) * t)}${toHex(aG + (bG - aG) * t)}${toHex(aB + (bB - aB) * t)}`;
-}
-
-function DevTools() {
-  return import.meta.env.DEV ? <DialRoot /> : null;
 }
 
 export default function App() {
@@ -232,7 +227,7 @@ export default function App() {
       className="relative overflow-hidden flex flex-col items-center justify-between font-['Inter',sans-serif]"
       style={{ minHeight: "100svh", height: "100dvh" }}
     >
-      {import.meta.env.DEV ? <><Agentation /><DevTools /></> : null}
+      {import.meta.env.DEV ? <Agentation /> : null}
 
       {/* Background gradient layers — crossfade between moods */}
       <AnimatePresence>

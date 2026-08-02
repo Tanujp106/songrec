@@ -3,18 +3,6 @@ import { motion } from "motion/react";
 import { toThumb } from "@/app/lib/api";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 
-// Fallback hook that returns defaults when dialkit is not available
-const useDialKitFallback = (_name: string, defaults: Record<string, Record<string, [number, number, number, number]>>) => {
-  return Object.fromEntries(
-    Object.entries(defaults).map(([group, params]) => [
-      group,
-      Object.fromEntries(
-        Object.entries(params).map(([key, [defaultValue]]) => [key, defaultValue])
-      )
-    ])
-  );
-};
-
 interface LoadingScreenProps {
   mood: string;
   popularity: string;
@@ -209,7 +197,6 @@ export function LoadingScreen({
 
   const baseProfile = isLowPerf ? LITE_PROFILE : FULL_PROFILE;
 
-  // DialKit disabled for LoadingScreen to avoid live tuning glitches.
   const profile: PerfProfile = {
     ...baseProfile,
   };
