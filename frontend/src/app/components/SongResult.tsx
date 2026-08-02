@@ -1,170 +1,33 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useDialKit } from "dialkit";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
 import {
-  getCarouselIndex,
-  finalCarouselDialConfig,
-  getFinalCarouselLayout,
-  getFinalCarouselOptions,
-  getResultScreenLayout,
-} from "../lib/carousel";
-import { getAlbumSlideMotion } from "../lib/carousel-motion";
+  createDiscoveryDeckState,
+  enterDiscovery,
+  finishDiscovery,
+  getActiveSongIndex,
+  getDeckCardLayout,
+  getDiscoveryGesture,
+  getDiscoveryImagePool,
+  getDiscoverySongs,
+  getDiscoverySwipeAction,
+  returnToPrimary,
+  shuffleDiscoveryDeck,
+  type DiscoveryGesture,
+} from "../lib/discovery-deck";
 import { getSongDetailMotion } from "../lib/detail-motion";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  type CarouselApi,
-} from "./ui/carousel";
+import { useDiscoveryDeckDial } from "./useDiscoveryDeckDial";
 
-const POPULARITY_LABELS = ["underrated", "moderate", "well-known", "popular"];
-
-/* ── Gyroscope-driven parallax float (mobile only) ───────────── */
-function useGyroParallax(
-  containerRef: React.RefObject<HTMLDivElement | null>,
-  maxOffset = 6,
-  maxRotation = 3,
-  activeKey?: string,
-) {
-  const [permissionGranted, setPermissionGranted] = useState(false);
-
-  // iOS Safari 13+ requires explicit permission from a user gesture
-  const requestPermission = useCallback(async () => {
-    if (permissionGranted) return;
-
-    const DOE = DeviceOrientationEvent as unknown as {
-      requestPermission?: () => Promise<string>;
-    };
-
-    if (typeof DOE.requestPermission === "function") {
-      try {
-        const result = await DOE.requestPermission();
-        if (result === "granted") {
-          setPermissionGranted(true);
-        }
-      } catch (err) {
-        console.warn("DeviceOrientation permission denied:", err);
-      }
-    } else {
-      // Non-iOS or older iOS - permission not required
-      setPermissionGranted(true);
-    }
-  }, [permissionGranted]);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    if (!permissionGranted) return; // Wait for permission on iOS
-
-    const target = { x: 0, y: 0 };
-    const current = { x: 0, y: 0 };
-    let active = false;
-    let baseBeta: number | null = null;
-    let raf: number;
-
-    const SMOOTHING = 0.07;
-    const START_DELAY = 800; // wait for morph animation to settle
-
-    const handleOrientation = (e: DeviceOrientationEvent) => {
-      const gamma = e.gamma ?? 0; // left/right tilt
-      const beta = e.beta ?? 0; // front/back tilt
-      // Calibrate: first reading = neutral position
-      if (baseBeta === null) baseBeta = beta;
-      target.x = Math.max(-1, Math.min(1, gamma / 30));
-      target.y = Math.max(-1, Math.min(1, (beta - baseBeta) / 30));
-      active = true;
-    };
-
-    window.addEventListener("deviceorientation", handleOrientation);
-
-    let started = false;
-    const startTimer = window.setTimeout(() => {
-      started = true;
-    }, START_DELAY);
-
-    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-    const animate = () => {
-      if (active && started) {
-        current.x = lerp(current.x, target.x, SMOOTHING);
-        current.y = lerp(current.y, target.y, SMOOTHING);
-
-        const tx = current.x * maxOffset;
-        const ty = current.y * maxOffset;
-        const rx = -current.y * maxRotation;
-        const ry = current.x * maxRotation;
-
-        el.style.transform =
-          `perspective(800px) translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg)`;
-      }
-      raf = requestAnimationFrame(animate);
-    };
-    raf = requestAnimationFrame(animate);
-
-    return () => {
-      window.removeEventListener("deviceorientation", handleOrientation);
-      cancelAnimationFrame(raf);
-      window.clearTimeout(startTimer);
-      el.style.transform = "";
-    };
-  }, [activeKey, containerRef, maxOffset, maxRotation, permissionGranted]);
-
-  return { requestPermission };
-}
-
-/* ── Subtle 3D tilt with cursor/finger tracking ──── */
-function use3DTilt(
-  containerRef: React.RefObject<HTMLDivElement | null>,
-  maxRotation = 4,
-  activeKey?: string,
-) {
-  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
-  const animationFrameRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const handleMove = (clientX: number, clientY: number) => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-
-      animationFrameRef.current = requestAnimationFrame(() => {
-        const bounds = el.getBoundingClientRect();
-        const centerX = bounds.left + bounds.width / 2;
-        const centerY = bounds.top + bounds.height / 2;
-
-        const percentX = (clientX - centerX) / (bounds.width / 2);
-        const percentY = (clientY - centerY) / (bounds.height / 2);
-
-        setTilt({
-          rotateY: percentX * maxRotation,
-          rotateX: -percentY * maxRotation,
-        });
-      });
-    };
-
-    const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
-    const handleReset = () => setTilt({ rotateX: 0, rotateY: 0 });
-
-    el.addEventListener("mousemove", handleMouseMove);
-    el.addEventListener("mouseleave", handleReset);
-
-    return () => {
-      el.removeEventListener("mousemove", handleMouseMove);
-      el.removeEventListener("mouseleave", handleReset);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    };
-  }, [activeKey, containerRef, maxRotation]);
-
-  return { tilt };
-}
+const RESULT_MAX_WIDTH = "min(100%, 1120px)";
 
 interface SongResultProps {
   mood: string;
@@ -172,6 +35,7 @@ interface SongResultProps {
   accentColor: string;
   onStartOver: () => void;
   songs: SongRecommendation[];
+  albumImages?: string[];
   morph: {
     startRadius: number;
     endRadius: number;
@@ -184,327 +48,652 @@ interface SongResultProps {
   };
 }
 
+interface GestureStart {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startsInsideActiveCard: boolean;
+}
+
+function FindingAnimation({
+  candidateImages,
+  shouldReduceMotion,
+}: {
+  candidateImages: string[];
+  shouldReduceMotion: boolean;
+}) {
+  const tileCount = 24;
+  const columns = 6;
+  const pool = candidateImages.length > 0 ? candidateImages : [imgAlbum];
+  const [tileStates, setTileStates] = useState(() => {
+    const initial = new Map<number, { src: string; phase: "idle" | "shrinking" | "growing" }>();
+    for (let index = 0; index < tileCount; index += 1) {
+      initial.set(index, { src: pool[index % pool.length], phase: "idle" });
+    }
+    return initial;
+  });
+
+  useEffect(() => {
+    if (shouldReduceMotion) return;
+    const timers: number[] = [];
+    const swapTimer = window.setInterval(() => {
+      const tileIndex = Math.floor(Math.random() * tileCount);
+      let nextSrc = pool[Math.floor(Math.random() * pool.length)];
+
+      setTileStates((current) => {
+        const next = new Map(current);
+        const currentSrc = current.get(tileIndex)?.src;
+        if (pool.length > 1) {
+          let attempts = 0;
+          while (nextSrc === currentSrc && attempts < 5) {
+            nextSrc = pool[Math.floor(Math.random() * pool.length)];
+            attempts += 1;
+          }
+        }
+        next.set(tileIndex, { src: currentSrc ?? nextSrc, phase: "shrinking" });
+        return next;
+      });
+
+      timers.push(window.setTimeout(() => {
+        setTileStates((current) => {
+          const next = new Map(current);
+          next.set(tileIndex, { src: nextSrc, phase: "growing" });
+          return next;
+        });
+      }, 220));
+
+      timers.push(window.setTimeout(() => {
+        setTileStates((current) => {
+          const next = new Map(current);
+          next.set(tileIndex, { src: nextSrc, phase: "idle" });
+          return next;
+        });
+      }, 480));
+    }, 380);
+    return () => {
+      window.clearInterval(swapTimer);
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [pool, shouldReduceMotion]);
+
+  return (
+    <motion.div
+      aria-hidden="true"
+      className="absolute inset-0 grid"
+      data-slot="discovery-finding-animation"
+      initial={{ opacity: 0, filter: "blur(18px)", y: 18 }}
+      animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+      transition={{ duration: shouldReduceMotion ? 0 : 0.45, ease: "easeOut" }}
+      style={{
+        gridTemplateColumns: "repeat(" + String(columns) + ", minmax(0, 1fr))",
+        gap: "8px",
+        padding: "10%",
+      }}
+    >
+      {Array.from({ length: tileCount }, (_, index) => {
+        const tile = tileStates.get(index) ?? { src: pool[index % pool.length], phase: "idle" as const };
+        const isShrinking = tile.phase === "shrinking";
+        const isGrowing = tile.phase === "growing";
+        return (
+          <div
+            key={index}
+            className="relative aspect-square overflow-hidden rounded-full"
+            data-slot="discovery-candidate"
+          >
+            <div
+              className="absolute inset-0"
+              style={{
+                transform: isShrinking ? "scale(0.72)" : "scale(1)",
+                filter: isShrinking ? "blur(6px)" : "blur(0px)",
+                transition: isShrinking
+                  ? "transform 220ms ease-in, filter 220ms ease-in"
+                  : isGrowing
+                    ? "transform 260ms ease-out, filter 260ms ease-out"
+                    : "none",
+              }}
+            >
+              <img
+                alt=""
+                className="absolute inset-0 size-full object-cover"
+                draggable={false}
+                src={tile.src}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </motion.div>
+  );
+}
+
 export function SongResult({
   mood,
-  popularity,
   accentColor,
+  albumImages = [],
   onStartOver,
   songs,
   morph,
 }: SongResultProps) {
-  const carouselDials = useDialKit("SONGREC final carousel", finalCarouselDialConfig, {
-    id: "songrec-final-carousel-v3",
-    persist: { key: "songrec:final-carousel:v3", presets: true },
-  });
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [hasExploredSongs, setHasExploredSongs] = useState(false);
-  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
-  const song = songs[activeIndex] ?? null;
-  const popLabel = POPULARITY_LABELS[popularity] || "popular";
+  const dial = useDiscoveryDeckDial();
+  const cardSize = "min(" + dial.layout.cardWidthVw + "vw, " + dial.layout.cardHeightVh + "svh, " + dial.layout.cardMaxPx + "px)";
+  const shouldReduceMotion = useReducedMotion() ?? false;
+  const detailMotion = getSongDetailMotion(shouldReduceMotion);
+  const discoverySongs = getDiscoverySongs(songs);
+  const selectedImages = discoverySongs.map((candidate) => candidate.album_image).filter(Boolean) as string[];
+  const candidateImages = getDiscoveryImagePool(selectedImages, albumImages);
+  const [deckState, setDeckState] = useState(createDiscoveryDeckState);
+  const [departingDeckIndex, setDepartingDeckIndex] = useState<number | null>(null);
+  const [isChamberRevealed, setIsChamberRevealed] = useState(false);
+  const gestureRef = useRef<GestureStart | null>(null);
+
+  const activeSongIndex = getActiveSongIndex(deckState, discoverySongs.length);
+  const song = songs[activeSongIndex] ?? songs[0] ?? null;
   const title = song?.song_name ?? "No song found";
   const artist = song?.artist?.length ? song.artist.join(", ") : "Unknown Artist";
   const album = song?.album_name ?? "Unknown album";
-  const albumImage = song?.album_image ?? imgAlbum;
   const spotifyUrl = song?.spotify_url ?? null;
-  const shouldReduceMotion = useReducedMotion() ?? false;
-  const detailMotion = getSongDetailMotion(shouldReduceMotion);
-  const carouselLayout = getFinalCarouselLayout(carouselDials);
-  const resultScreenLayout = getResultScreenLayout();
-  const description = hasExploredSongs
-    ? `More ${mood} songs you might like`
-    : `Here's a perfect ${mood} song for you`;
+  const activeSongKey = song?.spotify_url ?? (song?.song_name ?? "empty") + "-" + String(activeSongIndex);
+  const isPrimary = deckState.view === "primary";
+  const isFinding = deckState.view === "finding";
+  const isDeck = deckState.view === "deck";
+  const hasDiscovery = discoverySongs.length > 0;
+  const description = isPrimary
+    ? "Here's a perfect " + mood + " song for you"
+    : "More " + mood + " songs you might like";
 
   useEffect(() => {
-    setActiveIndex(0);
-    setHasExploredSongs(false);
-    carouselApi?.scrollTo(0, true);
-  }, [carouselApi, songs]);
+    setDeckState(createDiscoveryDeckState());
+    setDepartingDeckIndex(null);
+    gestureRef.current = null;
+  }, [songs]);
 
   useEffect(() => {
-    if (!carouselApi) return;
-
-    const syncActiveSong = () => {
-      const nextIndex = getCarouselIndex(carouselApi.selectedScrollSnap(), songs.length);
-      setActiveIndex(nextIndex);
-      if (nextIndex !== 0) setHasExploredSongs(true);
-    };
-
-    syncActiveSong();
-    carouselApi.on("select", syncActiveSong);
-    carouselApi.on("reInit", syncActiveSong);
-
-    return () => {
-      carouselApi.off("select", syncActiveSong);
-      carouselApi.off("reInit", syncActiveSong);
-    };
-  }, [carouselApi, songs.length]);
-
-  const activeSongKey = song?.spotify_url ?? `${song?.song_name ?? "empty"}-${activeIndex}`;
-
-  // Gyroscope parallax on album art
-  const albumContainerRef = useRef<HTMLDivElement>(null);
-  const { requestPermission: requestGyroPermission } = useGyroParallax(
-    albumContainerRef,
-    carouselDials.tilt.gyroXStrength,
-    carouselDials.tilt.gyroYStrength,
-    activeSongKey,
-  );
-  const { tilt } = use3DTilt(
-    albumContainerRef,
-    carouselDials.tilt.pointerTiltStrength,
-    activeSongKey,
-  );
-
-  // Auto-request permission on mount for non-iOS (Android doesn't need user gesture)
-  useEffect(() => {
-    const DOE = DeviceOrientationEvent as unknown as {
-      requestPermission?: () => Promise<string>;
-    };
-    if (typeof DOE.requestPermission !== "function") {
-      // Not iOS - trigger immediately
-      requestGyroPermission();
+    setIsChamberRevealed(false);
+    if (!hasDiscovery) return;
+    if (shouldReduceMotion) {
+      setIsChamberRevealed(true);
+      return;
     }
-  }, [requestGyroPermission]);
+
+    const timer = window.setTimeout(() => {
+      setIsChamberRevealed(true);
+    }, dial.timing.chamberDelay);
+    return () => window.clearTimeout(timer);
+  }, [dial.timing.chamberDelay, hasDiscovery, shouldReduceMotion, songs]);
+
+  useEffect(() => {
+    if (!isFinding) return;
+    const timer = window.setTimeout(() => {
+      setDeckState((state) => finishDiscovery(state, discoverySongs.length));
+    }, dial.timing.findingDuration);
+    return () => window.clearTimeout(timer);
+  }, [dial.timing.findingDuration, discoverySongs.length, isFinding]);
+
+  const enterOrAdvance = useCallback(() => {
+    if (!hasDiscovery || isFinding || departingDeckIndex !== null) return;
+
+    if (isPrimary) {
+      setDeckState((state) => enterDiscovery(state, discoverySongs.length));
+      return;
+    }
+
+    if (shouldReduceMotion) {
+      setDeckState((state) => shuffleDiscoveryDeck(state, discoverySongs.length));
+      return;
+    }
+
+    setDepartingDeckIndex(deckState.deckIndex);
+  }, [
+    deckState.deckIndex,
+    departingDeckIndex,
+    discoverySongs.length,
+    hasDiscovery,
+    isFinding,
+    isPrimary,
+    shouldReduceMotion,
+  ]);
+
+  const goBackToPrimary = useCallback(() => {
+    if (isPrimary) return;
+    setDepartingDeckIndex(null);
+    setDeckState((state) => returnToPrimary(state));
+  }, [isPrimary]);
+
+  const commitGesture = useCallback((
+    direction: DiscoveryGesture,
+    startsInsideActiveCard: boolean,
+  ) => {
+    const action = getDiscoverySwipeAction(
+      direction,
+      deckState.view,
+      startsInsideActiveCard,
+    );
+    if (action === "advance") enterOrAdvance();
+    if (action === "return") goBackToPrimary();
+  }, [deckState.view, enterOrAdvance, goBackToPrimary]);
+
+  const resetGesture = useCallback(() => {
+    gestureRef.current = null;
+  }, []);
+
+  const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || departingDeckIndex !== null) return;
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startsInsideActiveCard:
+        event.target instanceof Element &&
+        event.target.closest('[data-slot="discovery-card"][data-active="true"]') !== null,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [departingDeckIndex]);
+
+  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (Math.abs(deltaX) > Math.abs(deltaY)) event.preventDefault();
+  }, []);
+
+  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    const direction = getDiscoveryGesture({
+      startX: gesture.startX,
+      endX: event.clientX,
+      startY: gesture.startY,
+      endY: event.clientY,
+    }, dial.interaction.swipeThreshold);
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    resetGesture();
+    commitGesture(direction, gesture.startsInsideActiveCard);
+  }, [commitGesture, dial.interaction.swipeThreshold, resetGesture]);
+
+  const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      enterOrAdvance();
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      goBackToPrimary();
+    }
+  }, [enterOrAdvance, goBackToPrimary]);
+
+  const completeDeckShuffle = useCallback((index: number) => {
+    if (departingDeckIndex !== index) return;
+    setDeckState((state) => shuffleDiscoveryDeck(state, discoverySongs.length));
+    setDepartingDeckIndex(null);
+  }, [departingDeckIndex, discoverySongs.length]);
 
   return (
     <div
-      className="relative w-full flex-1 min-h-0 touch-pan-y"
-      aria-label="Song recommendations. Swipe left for the next song and right for the previous song."
+      className="relative mx-auto flex-1 min-h-0 touch-pan-y"
+      style={{ width: RESULT_MAX_WIDTH }}
     >
-      {songs.length > 1 && carouselDials.edgeCue.enabled && (
+      <div className="relative z-10 flex h-full w-full flex-1 flex-col items-center justify-between">
         <div
-          aria-hidden="true"
-          className="absolute top-[33%] right-0 z-[1] pointer-events-none"
-          style={{
-            height: `min(${carouselDials.geometry.slideWidthPercent}vw, 36vh)`,
-            width: `${carouselDials.edgeCue.widthPx}px`,
-            background: `linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,${carouselDials.edgeCue.opacity}))`,
-            backdropFilter: `blur(${carouselDials.edgeCue.blurPx}px)`,
-            WebkitBackdropFilter: `blur(${carouselDials.edgeCue.blurPx}px)`,
-            maskImage: "linear-gradient(to right, transparent, black 46%, black)",
-            WebkitMaskImage: "linear-gradient(to right, transparent, black 46%, black)",
-          }}
-        />
-      )}
-
-      <div className="relative z-10 w-full flex flex-col items-center justify-between flex-1 h-full">
-      {/* Top content */}
-      <div className="flex flex-col items-center w-full mt-auto" style={{ gap: `${carouselLayout.carouselTopGapPx}px` }}>
-        {/* Description text */}
-        <div
-          className="flex flex-col items-center w-full"
+          className="mt-auto flex w-full flex-col items-center"
+          style={{ gap: String(dial.layout.topGap) + "px" }}
         >
-          <AnimatePresence initial={false} mode="wait">
-            <motion.p
-              key={hasExploredSongs ? "more-songs" : "perfect-song"}
-              className="font-['Spectral',serif] text-center text-white w-full"
-              style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              {description}
-            </motion.p>
-          </AnimatePresence>
-        </div>
+          <div className="flex w-full flex-col items-center">
+            <AnimatePresence initial={false} mode="wait">
+              <motion.p
+                key={isPrimary ? "primary-heading" : "discovery-heading"}
+                className="w-full text-center font-['Spectral',serif] text-white"
+                style={{
+                  fontSize: "clamp(20px, 3.4svh, 24px)",
+                  lineHeight: "clamp(24px, 4svh, 28px)",
+                }}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: shouldReduceMotion ? 0 : 0.2, ease: "easeOut" }}
+              >
+                {description}
+              </motion.p>
+            </AnimatePresence>
+          </div>
 
-        {/* The continuous Embla track owns album-art movement; song details do not move with it. */}
-        <Carousel
-          className="w-full overflow-visible"
-          opts={getFinalCarouselOptions(songs.length, carouselDials, hasExploredSongs)}
-          setApi={setCarouselApi}
-          tabIndex={0}
-        >
-          <CarouselContent
-            className="ml-0"
-            style={{ gap: `${carouselLayout.gapPx}px` }}
-            viewportClassName="touch-pan-y"
+          <div
+            aria-label={
+              isPrimary
+                ? "Primary song recommendation. Swipe left to find more songs."
+                : "More song recommendations. Swipe left to shuffle and right to return to the original song."
+            }
+            className="group relative w-full select-none overflow-hidden outline-none"
+            data-view={deckState.view}
+            onKeyDown={handleKeyDown}
+            onLostPointerCapture={resetGesture}
+            onPointerCancel={resetGesture}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            role="group"
+            style={{
+              height: cardSize,
+              WebkitTapHighlightColor: "transparent",
+            }}
+            tabIndex={0}
           >
-            {songs.map((candidate, index) => {
-              const isActive = index === activeIndex;
-              const candidateKey = candidate.spotify_url ?? `${candidate.song_name}-${index}`;
-
-              return (
-                <CarouselItem
-                  key={candidateKey}
-                  className="basis-full pl-0 justify-start"
-                  style={{ flexBasis: carouselLayout.slideFlexBasis }}
-                  onClick={!isActive ? () => carouselApi?.scrollTo(index) : undefined}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <motion.div
+                className="relative aspect-square"
+                data-slot="primary-song"
+                animate={{
+                  x: isPrimary ? 0 : "calc(-225% - 48px)",
+                  opacity: isPrimary ? 1 : 0.35,
+                  scale: isPrimary ? 1 : 0.96,
+                }}
+                transition={shouldReduceMotion ? { duration: 0 } : dial.timing.panelSpring as never}
+                style={{ width: cardSize, willChange: "transform" }}
+              >
+                <motion.div
+                  className="absolute inset-0 overflow-hidden"
+                  layoutId="song-album"
+                  style={{ borderRadius: dial.layout.radius }}
+                  transition={{ layout: { ...morph.spring } }}
                 >
-                  <motion.div
-                    ref={isActive ? albumContainerRef : undefined}
-                    className="relative aspect-square w-full"
-                    style={{
-                      width: carouselLayout.albumWidth,
-                      willChange: "transform, filter",
-                    }}
-                    animate={getAlbumSlideMotion(tilt, isActive, carouselDials)}
-                    transition={{
-                      type: "spring",
-                      stiffness: carouselDials.tilt.springStiffness,
-                      damping: carouselDials.tilt.springDamping,
-                      mass: carouselDials.tilt.springMass,
-                    }}
-                    onTouchStart={isActive ? requestGyroPermission : undefined}
-                  >
+                  <img
+                    alt={isPrimary ? album : ""}
+                    className="absolute inset-0 size-full max-w-none object-cover"
+                    draggable={false}
+                    src={songs[0]?.album_image ?? imgAlbum}
+                    style={{ objectPosition: "50% 50%" }}
+                  />
+                </motion.div>
+              </motion.div>
+            </div>
+
+            {hasDiscovery && isChamberRevealed && (
+              <motion.div
+                aria-hidden={isPrimary}
+                className="absolute top-0 aspect-square border-2 border-dashed border-white/45 group-focus-visible:border-white/80"
+                data-slot="discovery-chamber"
+                initial={{
+                  left: "calc(100% - 10px)",
+                  x: "0%",
+                  opacity: 0,
+                }}
+                animate={{
+                  left: isPrimary ? "calc(100% - " + dial.layout.chamberPeek + "px)" : "50%",
+                  x: isPrimary ? "0%" : "-50%",
+                  opacity: 1,
+                }}
+                transition={shouldReduceMotion ? { duration: 0 } : dial.timing.panelSpring as never}
+                style={{
+                  width: cardSize,
+                  borderRadius: dial.layout.radius,
+                  willChange: "left, transform",
+                }}
+              >
+                <AnimatePresence initial={false} mode="wait">
+                  {isFinding && (
                     <motion.div
-                      className="absolute inset-0 pointer-events-none"
-                    style={{ borderRadius: carouselDials.appearance.borderRadiusPx }}
-                    initial={{ opacity: 0 }}
-                      animate={{
-                        opacity: 1,
-                        boxShadow: `0px ${carouselDials.appearance.shadowY}px ${carouselDials.appearance.shadowBlurPx}px rgba(19,15,41,${carouselDials.appearance.shadowOpacity})`,
-                      }}
-                      transition={{ duration: 1, delay: 1.2, ease: "easeOut" }}
-                    />
-                    <motion.div
-                      className="absolute inset-0 overflow-hidden"
-                      layoutId={index === 0 ? "song-album" : undefined}
-                      style={{ borderRadius: carouselDials.appearance.borderRadiusPx }}
-                      transition={{ layout: { ...morph.spring } }}
+                      key="finding"
+                      className="absolute inset-0"
+                      data-slot="discovery-finding"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: shouldReduceMotion ? 0 : 0.18 }}
                     >
-                      <img
-                        alt={isActive ? album : ""}
-                        className="absolute inset-0 max-w-none object-cover size-full"
-                        style={{
-                          objectPosition: `${carouselDials.image.objectPositionXPercent}% ${carouselDials.image.objectPositionYPercent}%`,
-                        }}
-                        src={candidate.album_image ?? imgAlbum}
+                      <FindingAnimation
+                        candidateImages={candidateImages.length > 0 ? candidateImages : [imgAlbum]}
+                        shouldReduceMotion={shouldReduceMotion}
                       />
                     </motion.div>
-                  </motion.div>
-                </CarouselItem>
-              );
-            })}
-          </CarouselContent>
-        </Carousel>
+                  )}
 
-        {/* Song details stay anchored while their content blur-crossfades. */}
-        <div
-          className="relative w-full px-[24px]"
-          style={{ height: `${carouselLayout.detailSlotHeightPx}px` }}
-          aria-live="polite"
-        >
-          <AnimatePresence initial={false}>
-            <motion.div
-              key={activeSongKey}
-              className="absolute inset-x-0 top-0 flex flex-col items-center w-full"
-              style={{ gap: `${carouselLayout.detailGapPx}px` }}
-              initial={detailMotion.initial}
-              animate={detailMotion.animate}
-              exit={detailMotion.exit}
-              transition={detailMotion.transition}
-            >
-              <p className="font-['Spectral',serif] text-white tracking-[-0.96px] text-center overflow-hidden text-ellipsis whitespace-nowrap w-full" style={{ fontSize: "clamp(20px, 3.4svh, 24px)", lineHeight: "clamp(24px, 4svh, 28px)" }}>
-                {title}
-              </p>
-              <div className="flex flex-col items-center text-white/80 tracking-[-0.48px] w-full" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
-              <p className="overflow-hidden text-center w-full whitespace-nowrap text-ellipsis">by {artist}</p>
-            {/* Album — single-line, truncated */}
-            <p className="overflow-hidden text-center w-full whitespace-nowrap text-ellipsis">From {album}</p>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
+                  {isDeck && (
+                    <motion.div
+                      key="deck"
+                      className="absolute inset-0"
+                      data-slot="discovery-deck"
+                      initial={{ opacity: 0, scale: shouldReduceMotion ? 1 : 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: shouldReduceMotion ? 0 : 0.24, ease: "easeOut" }}
+                    >
+                      {discoverySongs.map((candidate, index) => {
+                        const position = (
+                          index - deckState.deckIndex + discoverySongs.length
+                        ) % discoverySongs.length;
+                        const layout = getDeckCardLayout(position, {
+                          stackX: dial.stack.x,
+                          stackY: dial.stack.y,
+                          stackRotate: dial.stack.rotate,
+                          stackScaleStep: dial.stack.scaleStep,
+                          stackOpacityStep: dial.stack.opacityStep,
+                        });
+                        const isTopCard = position === 0;
+                        const isDeparting = departingDeckIndex === index;
+                        const candidateKey = candidate.spotify_url ??
+                          candidate.song_name + "-" + String(index);
 
-      {/* Bottom buttons */}
-      <div
-        className="flex flex-col items-center w-full mt-auto"
-        style={{ gap: "clamp(6px, 1.2svh, 8px)", paddingInline: `${resultScreenLayout.actionInsetPx}px` }}
-      >
-        {/* Add to Spotify button */}
-        <motion.a
-          className="w-full flex gap-[8px] items-center justify-center rounded-[1000px] text-white cursor-pointer"
-          style={{
-            padding: "clamp(10px, 1.8svh, 16px) 0",
-            opacity: spotifyUrl ? 1 : 0,
-            pointerEvents: spotifyUrl ? "auto" : "none",
-            WebkitTapHighlightColor: "transparent",
-          }}
-          animate={{
-            backgroundColor: accentColor,
-          }}
-          transition={{
-            backgroundColor: { duration: 0.8, ease: "easeInOut" },
-            scale: { duration: 0.18, ease: "easeOut" },
-            y: { duration: 0.18, ease: "easeOut" },
-          }}
-          whileHover={spotifyUrl ? { scale: 1.01 } : undefined}
-          whileTap={spotifyUrl ? { scale: 0.98, y: 1 } : undefined}
-          href={spotifyUrl ?? undefined}
-          target={spotifyUrl ? "_blank" : undefined}
-          rel={spotifyUrl ? "noopener noreferrer" : undefined}
-          aria-disabled={!spotifyUrl}
-          aria-label={`Open ${title} on Spotify`}
-        >
-          {/* Spotify icon */}
-          <div className="overflow-clip relative shrink-0 size-[20px]" aria-hidden="true">
-            <svg
-              className="absolute block size-full"
-              fill="none"
-              preserveAspectRatio="none"
-              viewBox="0 0 19.6984 19.6984"
-              role="img"
-              aria-label="Spotify logo"
-              style={{ transform: "scaleY(-1)" }}
-            >
-              <path d={svgPaths.p2d573100} fill="white" />
-            </svg>
+                        return (
+                          <motion.div
+                            key={candidateKey}
+                            aria-hidden={!isTopCard}
+                            className="absolute overflow-hidden"
+                            data-active={isTopCard ? "true" : "false"}
+                            data-slot="discovery-card"
+                            animate={isDeparting
+                              ? {
+                                  x: "-" + dial.interaction.exitDistance + "%",
+                                  y: 8,
+                                  rotate: -dial.interaction.exitTilt,
+                                  scale: 0.98,
+                                  opacity: 0,
+                                }
+                              : {
+                                  x: layout.x,
+                                  y: layout.y,
+                                  rotate: layout.rotate,
+                                  scale: layout.scale,
+                                  opacity: layout.opacity,
+                                }}
+                            onAnimationComplete={() => completeDeckShuffle(index)}
+                            style={{
+                              inset: String(dial.layout.cardInset) + "%",
+                              borderRadius: dial.layout.radius - 6,
+                              zIndex: discoverySongs.length - position,
+                              willChange: "transform, opacity",
+                              boxShadow: "0 18px " + dial.stack.shadowBlur + "px rgba(23,16,39,0.22)",
+                            }}
+                            transition={shouldReduceMotion ? { duration: 0 } : isDeparting ? { duration: dial.timing.exitDuration, ease: "easeOut" } : dial.timing.cardSpring as never}
+                          >
+                            <img
+                              alt={isTopCard ? candidate.album_name ?? candidate.song_name : ""}
+                              className="absolute inset-0 size-full max-w-none object-cover"
+                              draggable={false}
+                              src={candidate.album_image ?? imgAlbum}
+                            />
+                          </motion.div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
           </div>
-          <span className="font-['Switzer',sans-serif] tracking-[-0.16px] whitespace-nowrap font-medium" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
-            Add to Spotify
-          </span>
-        </motion.a>
 
-        {/* Start over button */}
-        <motion.button
-          className="w-full flex gap-[8px] items-center justify-center rounded-[1000px] relative cursor-pointer bg-transparent"
-          style={{ padding: "clamp(10px, 1.8svh, 16px) 0", WebkitTapHighlightColor: "transparent" }}
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.98, y: 1 }}
-          transition={{
-            scale: { duration: 0.18, ease: "easeOut" },
-            y: { duration: 0.18, ease: "easeOut" },
-          }}
-          onClick={onStartOver}
-        >
           <div
-            aria-hidden="true"
-            className="absolute border border-white/80 border-solid inset-0 pointer-events-none rounded-[1000px]"
-          />
-          {/* Replay icon */}
-          <div className="relative shrink-0 size-[20px]" aria-hidden="true">
-            <svg
-              className="absolute block size-full"
-              fill="none"
-              preserveAspectRatio="none"
-              viewBox="0 0 20 20"
-              role="img"
-              aria-label="Replay icon"
-            >
-              <mask
-                height="20"
-                id="mask_replay"
-                maskUnits="userSpaceOnUse"
-                style={{ maskType: "alpha" }}
-                width="20"
-                x="0"
-                y="0"
-              >
-                <rect fill="#D9D9D9" height="20" width="20" />
-              </mask>
-              <g mask="url(#mask_replay)">
-                <path d={svgPaths.p3810fe00} fill="white" fillOpacity="0.8" />
-              </g>
-            </svg>
+            aria-live="polite"
+            className="relative w-full px-[24px]"
+            style={{ height: String(dial.layout.detailHeight) + "px" }}
+          >
+            <AnimatePresence initial={false} mode="wait">
+              {isFinding ? (
+                <motion.div
+                  key="finding-copy"
+                  className="absolute inset-x-0 top-0 flex w-full flex-col items-center"
+                  style={{ gap: String(dial.layout.detailGap) + "px" }}
+                  initial={detailMotion.initial}
+                  animate={detailMotion.animate}
+                  exit={detailMotion.exit}
+                  transition={detailMotion.transition}
+                >
+                  <p
+                    className="songrec-copy-shimmer w-full overflow-hidden text-ellipsis whitespace-nowrap text-center font-['Spectral',serif] tracking-[-0.96px]"
+                    style={{
+                      fontSize: "clamp(20px, 3.4svh, 24px)",
+                      lineHeight: "clamp(24px, 4svh, 28px)",
+                    }}
+                  >
+                    Finding more songs for this mood
+                  </p>
+                  <p
+                    className="w-full text-center text-white/80"
+                    style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}
+                  >
+                    Hang on a second, twin.
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={activeSongKey}
+                  className="absolute inset-x-0 top-0 flex w-full flex-col items-center"
+                  style={{ gap: String(dial.layout.detailGap) + "px" }}
+                  initial={detailMotion.initial}
+                  animate={detailMotion.animate}
+                  exit={detailMotion.exit}
+                  transition={detailMotion.transition}
+                >
+                  <p
+                    className="w-full overflow-hidden text-ellipsis whitespace-nowrap text-center font-['Spectral',serif] tracking-[-0.96px] text-white"
+                    style={{
+                      fontSize: "clamp(20px, 3.4svh, 24px)",
+                      lineHeight: "clamp(24px, 4svh, 28px)",
+                    }}
+                  >
+                    {title}
+                  </p>
+                  <div
+                    className="flex w-full flex-col items-center tracking-[-0.48px] text-white/80"
+                    style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}
+                  >
+                    <p className="w-full overflow-hidden text-ellipsis whitespace-nowrap text-center">
+                      by {artist}
+                    </p>
+                    <p className="w-full overflow-hidden text-ellipsis whitespace-nowrap text-center">
+                      From {album}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          <span className="font-['Switzer',sans-serif] text-white/80 tracking-[-0.16px] whitespace-nowrap font-medium" style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}>
-            Start over
-          </span>
-        </motion.button>
-      </div>
+        </div>
+
+        <div
+          className="mt-auto flex w-full flex-col items-center"
+          style={{
+            gap: "clamp(6px, 1.2svh, 8px)",
+            paddingInline: "24px",
+          }}
+        >
+          <motion.a
+            aria-disabled={!spotifyUrl}
+            aria-label={"Open " + title + " on Spotify"}
+            className="flex w-full cursor-pointer items-center justify-center gap-[8px] rounded-[1000px] text-white"
+            href={spotifyUrl ?? undefined}
+            rel={spotifyUrl ? "noopener noreferrer" : undefined}
+            target={spotifyUrl ? "_blank" : undefined}
+            style={{
+              padding: "clamp(10px, 1.8svh, 16px) 0",
+              opacity: spotifyUrl ? 1 : 0,
+              pointerEvents: spotifyUrl ? "auto" : "none",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            animate={{ backgroundColor: accentColor }}
+            transition={{
+              backgroundColor: { duration: 0.8, ease: "easeInOut" },
+              scale: { duration: 0.18, ease: "easeOut" },
+              y: { duration: 0.18, ease: "easeOut" },
+            }}
+            whileHover={spotifyUrl ? { scale: 1.01 } : undefined}
+            whileTap={spotifyUrl ? { scale: 0.98, y: 1 } : undefined}
+          >
+            <div aria-hidden="true" className="relative size-[20px] shrink-0 overflow-clip">
+              <svg
+                aria-label="Spotify logo"
+                className="absolute block size-full"
+                fill="none"
+                preserveAspectRatio="none"
+                role="img"
+                style={{ transform: "scaleY(-1)" }}
+                viewBox="0 0 19.6984 19.6984"
+              >
+                <path d={svgPaths.p2d573100} fill="white" />
+              </svg>
+            </div>
+            <span
+              className="whitespace-nowrap font-['Switzer',sans-serif] font-medium tracking-[-0.16px]"
+              style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}
+            >
+              Add to Spotify
+            </span>
+          </motion.a>
+
+          <motion.button
+            className="relative flex w-full cursor-pointer items-center justify-center gap-[8px] rounded-[1000px] bg-transparent"
+            onClick={onStartOver}
+            style={{
+              padding: "clamp(10px, 1.8svh, 16px) 0",
+              WebkitTapHighlightColor: "transparent",
+            }}
+            transition={{
+              scale: { duration: 0.18, ease: "easeOut" },
+              y: { duration: 0.18, ease: "easeOut" },
+            }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.98, y: 1 }}
+          >
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-[1000px] border border-solid border-white/80"
+            />
+            <div aria-hidden="true" className="relative size-[20px] shrink-0">
+              <svg
+                aria-label="Replay icon"
+                className="absolute block size-full"
+                fill="none"
+                preserveAspectRatio="none"
+                role="img"
+                viewBox="0 0 20 20"
+              >
+                <mask
+                  height="20"
+                  id="mask_replay"
+                  maskUnits="userSpaceOnUse"
+                  style={{ maskType: "alpha" }}
+                  width="20"
+                  x="0"
+                  y="0"
+                >
+                  <rect fill="#D9D9D9" height="20" width="20" />
+                </mask>
+                <g mask="url(#mask_replay)">
+                  <path d={svgPaths.p3810fe00} fill="white" fillOpacity="0.8" />
+                </g>
+              </svg>
+            </div>
+            <span
+              className="whitespace-nowrap font-['Switzer',sans-serif] font-medium tracking-[-0.16px] text-white/80"
+              style={{ fontSize: "clamp(14px, 2.3svh, 16px)" }}
+            >
+              Start over
+            </span>
+          </motion.button>
+        </div>
       </div>
     </div>
   );

@@ -4,19 +4,20 @@ import { MoodPicker, MOOD_COLORS, entranceProps } from "./components/MoodDial";
 import { PopularitySlider } from "./components/PopularitySlider";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { SongResult } from "./components/SongResult";
-import { getResultScreenLayout } from "./lib/carousel";
 import {
   fetchAllMoodImages,
   fetchRecommendations,
   preloadImageFiles,
   type SongRecommendation,
 } from "./lib/api";
+
 import { Agentation } from "agentation";
 import { Analytics } from "@vercel/analytics/react";
 import { MeasurementScripts } from "./components/MeasurementScripts";
 import { createRequestGuard } from "./lib/request-guard";
 import { DialRoot } from "dialkit";
 
+const RESULT_ACTION_INSET_PX = 24;
 const DEFAULT_FROM = "#5A54F2";
 
 type Screen = "mood" | "loading" | "result";
@@ -61,7 +62,6 @@ export default function App() {
   const [popularity, setPopularity] = useState(0); // 0–3
   const [screen, setScreen] = useState<Screen>("mood");
   const [songs, setSongs] = useState<SongRecommendation[]>([]);
-  const resultScreenLayout = getResultScreenLayout();
   const [albumImagesMood, setAlbumImagesMood] = useState<string | null>(null);
   const [dialNudge, setDialNudge] = useState(false);
   const [btnShake, setBtnShake] = useState(false);
@@ -264,7 +264,7 @@ export default function App() {
         {/* Header — always visible */}
         <motion.header
           className="w-full flex justify-between items-center text-white font-['Spectral',serif] tracking-wide shrink-0"
-          style={{ fontSize: "clamp(15px, 2.4svh, 18px)", paddingInline: `${resultScreenLayout.actionInsetPx}px` }}
+          style={{ fontSize: "clamp(15px, 2.4svh, 18px)", paddingInline: `${RESULT_ACTION_INSET_PX}px` }}
           {...entranceProps(0)}
         >
           <span>songrec</span>
@@ -392,6 +392,7 @@ export default function App() {
                     accentColor={accentColor}
                     onStartOver={handleStartOver}
                     songs={songs}
+                    albumImages={albumImages}
                     morph={morphDial}
                   />
                 </motion.div>
