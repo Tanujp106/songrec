@@ -372,3 +372,19 @@ export function getDeckCardLayout(
     ),
   };
 }
+
+export function getDiscoveryBackCardLayout(
+  cardCount: number,
+  tuning: DiscoveryDeckTuning = DEFAULT_DISCOVERY_DECK_TUNING,
+): DeckCardLayout {
+  return getDeckCardLayout(Math.max(0, cardCount - 1), tuning);
+}
+
+export function getDiscoveryCardZIndex(
+  position: number,
+  cardCount: number,
+  isDeparting: boolean,
+): number {
+  if (isDeparting) return Math.max(1, cardCount + 1);
+  return Math.max(1, cardCount - Math.max(0, position));
+}

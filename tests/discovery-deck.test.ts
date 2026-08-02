@@ -21,10 +21,12 @@ import {
   getDiscoveryArtworkDragOffset,
   getDiscoveryArtworkReleaseVelocity,
   getDiscoveryArtworkScale,
+  getDiscoveryBackCardLayout,
   getDiscoveryExitTravel,
   getDiscoveryImagePool,
   getDiscoveryMorphSourceImage,
   getDiscoveryGesture,
+  getDiscoveryCardZIndex,
   isDiscoveryPointInsideChamber,
   getDiscoverySwipeAction,
   getDiscoverySongs,
@@ -99,7 +101,7 @@ test("maps a morph source rectangle into a stable stacked-card target", () => {
   );
 });
 
-test("marks the departed card as an instant re-entry when it is put behind the stack", () => {
+test("marks the departed card as re-entering when it is put behind the stack", () => {
   assert.equal(
     getDiscoveryCardMotionPhase({ index: 0, departingDeckIndex: null, reenteringDeckIndex: 0 }),
     "reentering",
@@ -112,6 +114,32 @@ test("marks the departed card as an instant re-entry when it is put behind the s
     getDiscoveryCardMotionPhase({ index: 1, departingDeckIndex: 0, reenteringDeckIndex: null }),
     "stack",
   );
+});
+
+test("targets the real back-of-stack layout during a card departure", () => {
+  const back = getDiscoveryBackCardLayout(4, {
+    stackX: 8,
+    stackY: 4,
+    stackRotate: 7,
+    stackScaleStep: 0.02,
+    stackOpacityStep: 0,
+  });
+
+  assert.deepEqual(back, getDeckCardLayout(3, {
+    stackX: 8,
+    stackY: 4,
+    stackRotate: 7,
+    stackScaleStep: 0.02,
+    stackOpacityStep: 0,
+  }));
+  assert.ok(back.x > 0);
+  assert.ok(back.y < 0);
+  assert.ok(back.scale < 1);
+});
+
+test("keeps the departing card above the advancing stack", () => {
+  assert.ok(getDiscoveryCardZIndex(3, 4, true) > getDiscoveryCardZIndex(0, 4, false));
+  assert.equal(getDiscoveryCardZIndex(3, 4, false), 1);
 });
 
 test("requires a deliberate horizontal swipe to change discovery state", () => {

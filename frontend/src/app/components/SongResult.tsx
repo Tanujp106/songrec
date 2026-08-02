@@ -32,9 +32,10 @@ import {
   getDiscoveryArtworkDragOffset,
   getDiscoveryArtworkReleaseVelocity,
   getDiscoveryArtworkScale,
+  getDiscoveryBackCardLayout,
   getDiscoveryCardDragOffset,
   getDiscoveryCardMotionPhase,
-  getDiscoveryExitTravel,
+  getDiscoveryCardZIndex,
   getDeckCardLayout,
   getDiscoveryGesture,
   getDiscoveryImagePool,
@@ -86,9 +87,11 @@ const DISCOVERY_STACK_TUNING = {
   shadowBlur: 34,
 };
 const DISCOVERY_SWIPE_THRESHOLD_PX = 36;
-const DISCOVERY_EXIT_TRAVEL_PERCENT = 12;
-const DISCOVERY_EXIT_TILT_DEG = 4;
-const DISCOVERY_EXIT_DURATION_S = 0.23;
+const DISCOVERY_CARD_TO_BACK_SPRING = {
+  type: "spring" as const,
+  visualDuration: 0.32,
+  bounce: 0.06,
+};
 const DISCOVERY_ARTWORK_RETURN_SPRING = {
   type: "spring" as const,
   stiffness: 300,
@@ -378,7 +381,6 @@ export function SongResult({
   const [deckState, setDeckState] = useState(createDiscoveryDeckState);
   const [deckOrder, setDeckOrder] = useState<number[]>(() => []);
   const [departingDeckIndex, setDepartingDeckIndex] = useState<number | null>(null);
-  const [departingGesture, setDepartingGesture] = useState<DiscoveryGesture>(null);
   const [reenteringDeckIndex, setReenteringDeckIndex] = useState<number | null>(null);
   const [isDiscoveryMorphing, setIsDiscoveryMorphing] = useState(false);
   const [morphCapture, setMorphCapture] = useState<DiscoveryMorphCapture | null>(null);
@@ -443,7 +445,6 @@ export function SongResult({
     setDeckState(createDiscoveryDeckState());
     setDeckOrder(discoverySongs.map((_, index) => index));
     setDepartingDeckIndex(null);
-    setDepartingGesture(null);
     setReenteringDeckIndex(null);
     setIsDiscoveryMorphing(false);
     setMorphCapture(null);
@@ -551,24 +552,26 @@ export function SongResult({
   }, [visibleDeckOrder]);
 
   const enterOrAdvance = useCallback((
-    gesture: DiscoveryGesture = "next",
     cardIndex = visibleDeckOrder[0] ?? deckState.deckIndex,
   ) => {
     if (!hasDiscovery || isFinding || departingDeckIndex !== null) return;
 
     if (isPrimary) {
-      setDepartingGesture(null);
       setDeckState((state) => enterDiscovery(state, discoverySongs.length));
       return;
     }
 
     if (shouldReduceMotion) {
-      setDepartingGesture(null);
       sendCardToBackImmediately(cardIndex);
       return;
     }
 
-    setDepartingGesture(gesture);
+    const nextOrder = sendDiscoveryCardToBack(visibleDeckOrder, cardIndex);
+    setDeckOrder(nextOrder);
+    setDeckState((state) => ({
+      ...state,
+      deckIndex: nextOrder[0] ?? state.deckIndex,
+    }));
     setDepartingDeckIndex(cardIndex);
   }, [
     deckState.deckIndex,
@@ -585,7 +588,6 @@ export function SongResult({
   const goBackToPrimary = useCallback(() => {
     if (isPrimary) return;
     setDepartingDeckIndex(null);
-    setDepartingGesture(null);
     setIsDiscoveryMorphing(false);
     setDeckState((state) => returnToPrimary(state));
   }, [isPrimary]);
@@ -599,7 +601,7 @@ export function SongResult({
       deckState.view,
       startsInsideChamber,
     );
-    if (action === "advance") enterOrAdvance(direction);
+    if (action === "advance") enterOrAdvance();
     if (action === "return") goBackToPrimary();
   }, [deckState.view, enterOrAdvance, goBackToPrimary]);
 
@@ -696,16 +698,9 @@ export function SongResult({
 
   const completeDeckShuffle = useCallback((index: number) => {
     if (departingDeckIndex !== index) return;
-    const nextOrder = sendDiscoveryCardToBack(visibleDeckOrder, index);
     setReenteringDeckIndex(index);
-    setDeckOrder(nextOrder);
-    setDeckState((state) => ({
-      ...state,
-      deckIndex: nextOrder[0] ?? state.deckIndex,
-    }));
     setDepartingDeckIndex(null);
-    setDepartingGesture(null);
-  }, [departingDeckIndex, visibleDeckOrder]);
+  }, [departingDeckIndex]);
 
   return (
     <div
@@ -950,9 +945,15 @@ export function SongResult({
                           departingDeckIndex,
                           reenteringDeckIndex,
                         });
-                        const departingX = getDiscoveryExitTravel(
-                          departingGesture,
-                          DISCOVERY_EXIT_TRAVEL_PERCENT,
+                        const departingLayout = getDiscoveryBackCardLayout(
+                          discoverySongs.length,
+                          {
+                            stackX: DISCOVERY_STACK_TUNING.x,
+                            stackY: DISCOVERY_STACK_TUNING.y,
+                            stackRotate: DISCOVERY_STACK_TUNING.rotate,
+                            stackScaleStep: DISCOVERY_STACK_TUNING.scaleStep,
+                            stackOpacityStep: DISCOVERY_STACK_TUNING.opacityStep,
+                          },
                         );
                         const candidateKey = candidate.spotify_url ??
                           candidate.song_name + "-" + String(index);
@@ -966,26 +967,28 @@ export function SongResult({
                             style={{
                               inset: String(DISCOVERY_CARD_INSET_PERCENT) + "%",
                               borderRadius: DISCOVERY_RADIUS_PX,
-                              zIndex: discoverySongs.length - position,
+                              zIndex: getDiscoveryCardZIndex(
+                                position,
+                                discoverySongs.length,
+                                motionPhase === "departing",
+                              ),
                               willChange: "transform, opacity",
                               boxShadow: "0 18px " + DISCOVERY_STACK_TUNING.shadowBlur + "px rgba(23,16,39,0.22)",
                             }}
                           >
                             <DiscoveryDraggableCard
                               canDrag={isDeck && departingDeckIndex === null && !shouldReduceMotion}
-                              onSendToBack={(direction) => enterOrAdvance(direction, index)}
+                              onSendToBack={() => enterOrAdvance(index)}
                               swipeThresholdPx={DISCOVERY_SWIPE_THRESHOLD_PX}
                             >
                               <motion.div
                                 animate={motionPhase === "departing"
                                   ? {
-                                      x: String(departingX) + "%",
-                                      y: 0,
-                                      rotate: departingGesture === "previous"
-                                        ? DISCOVERY_EXIT_TILT_DEG
-                                        : -DISCOVERY_EXIT_TILT_DEG,
-                                      scale: 0.98,
-                                      opacity: 0.96,
+                                      x: departingLayout.x,
+                                      y: departingLayout.y,
+                                      rotate: departingLayout.rotate,
+                                      scale: departingLayout.scale,
+                                      opacity: departingLayout.opacity,
                                     }
                                   : {
                                       x: layout.x,
@@ -1000,8 +1003,8 @@ export function SongResult({
                                 transition={{
                                   default: shouldReduceMotion || motionPhase === "reentering"
                                     ? { duration: 0 }
-                                    : motionPhase === "departing"
-                                      ? { duration: DISCOVERY_EXIT_DURATION_S, ease: "easeOut" }
+                                    : departingDeckIndex !== null
+                                      ? DISCOVERY_CARD_TO_BACK_SPRING
                                       : DISCOVERY_CARD_SPRING,
                                 } as never}
                               >
