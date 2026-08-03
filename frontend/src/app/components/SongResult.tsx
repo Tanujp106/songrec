@@ -45,6 +45,14 @@ import {
 import { DiscoveryCardStack } from "./DiscoveryCardStack";
 import {
   RESULT_ACTION_HEIGHT,
+  RESULT_ACTION_MAX_WIDTH,
+  RESULT_TOP_PADDING,
+  RESULT_ACTION_BOTTOM_PADDING,
+  RESULT_ACTION_TOP_GAP,
+  RESULT_DETAIL_HEIGHT,
+  RESULT_DISCOVERY_TOP_GAP,
+  RESULT_DETAIL_GAP,
+  RESULT_CARD_SIZE,
   RESULT_CONTENT_REVEAL_DELAY_MS,
   getResultContentMotion,
   getStableArtworkSource,
@@ -52,12 +60,7 @@ import {
 } from "../lib/detail-motion";
 
 const RESULT_MAX_WIDTH = "min(100%, 1120px)";
-const RESULT_TOP_PADDING_PX = 24;
 const DISCOVERY_SIDE_PADDING_PX = 24;
-const DISCOVERY_CARD_SIZE = "min(80vw, 55svh, 560px, max(180px, calc(100dvh - 420px)))";
-const DISCOVERY_TOP_GAP_PX = 40;
-const DISCOVERY_DETAIL_GAP_PX = 12;
-const DISCOVERY_DETAIL_HEIGHT_PX = 120;
 const DISCOVERY_RADIUS_PX = 24;
 const DISCOVERY_CARD_INSET_PERCENT = 12;
 const DISCOVERY_CHAMBER_PEEK_PX = 20;
@@ -285,7 +288,7 @@ export function SongResult({
   songs,
   morph,
 }: SongResultProps) {
-  const cardSize = DISCOVERY_CARD_SIZE;
+  const cardSize = RESULT_CARD_SIZE;
   const shouldReduceMotion = useReducedMotion() ?? false;
   const detailMotion = getSongDetailMotion(shouldReduceMotion);
   const resultContentMotion = getResultContentMotion(shouldReduceMotion);
@@ -619,18 +622,19 @@ export function SongResult({
       className="relative mx-auto flex-1 min-h-0 touch-pan-y"
       style={{
         width: RESULT_MAX_WIDTH,
-        paddingTop: String(RESULT_TOP_PADDING_PX) + "px",
+        paddingTop: RESULT_TOP_PADDING,
+        paddingBottom: RESULT_ACTION_BOTTOM_PADDING,
         boxSizing: "border-box",
       }}
     >
       <div
-        className="relative z-10 flex h-full min-h-0 w-full flex-1 flex-col items-center justify-between"
+        className="relative z-10 flex h-full min-h-0 w-full flex-1 flex-col items-center"
       >
         <div
           className="mt-auto flex w-full flex-col items-center"
           style={{
-            gap: String(DISCOVERY_TOP_GAP_PX) + "px",
-            paddingBottom: "12px",
+            gap: RESULT_DISCOVERY_TOP_GAP,
+            paddingBottom: "clamp(8px, 1.5svh, 12px)",
           }}
         >
           <motion.div
@@ -880,7 +884,7 @@ export function SongResult({
             aria-live="polite"
             className="relative w-full px-[24px]"
             data-slot="result-details"
-            style={{ height: String(DISCOVERY_DETAIL_HEIGHT_PX) + "px" }}
+            style={{ height: RESULT_DETAIL_HEIGHT }}
             initial={resultContentMotion.initial}
             animate={isResultContentRevealed ? resultContentMotion.animate : resultContentMotion.initial}
             transition={resultContentMotion.transition}
@@ -890,7 +894,7 @@ export function SongResult({
                 <motion.div
                   key="finding-copy"
                   className="absolute inset-x-0 top-0 flex w-full flex-col items-center"
-                  style={{ gap: String(DISCOVERY_DETAIL_GAP_PX) + "px" }}
+                  style={{ gap: RESULT_DETAIL_GAP }}
                   initial={detailMotion.initial}
                   animate={detailMotion.animate}
                   exit={detailMotion.exit}
@@ -916,7 +920,7 @@ export function SongResult({
                 <motion.div
                   key={activeSongKey}
                   className="absolute inset-x-0 top-0 flex w-full flex-col items-center"
-                  style={{ gap: String(DISCOVERY_DETAIL_GAP_PX) + "px" }}
+                  style={{ gap: RESULT_DETAIL_GAP }}
                   initial={detailMotion.initial}
                   animate={detailMotion.animate}
                   exit={detailMotion.exit}
@@ -949,11 +953,15 @@ export function SongResult({
         </div>
 
         <motion.div
-          className="mt-auto flex w-full flex-col items-center"
+          className="flex w-full flex-col items-center"
           data-slot="result-actions"
           style={{
             gap: "clamp(6px, 1.2svh, 8px)",
+            marginTop: RESULT_ACTION_TOP_GAP,
             paddingInline: "24px",
+            width: "100%",
+            maxWidth: RESULT_ACTION_MAX_WIDTH,
+            boxSizing: "border-box",
             pointerEvents: isResultContentRevealed ? "auto" : "none",
           }}
           initial={resultContentMotion.initial}

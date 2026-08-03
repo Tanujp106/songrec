@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "motion/react";
-import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
-import { getStableArtworkSource } from "../lib/detail-motion";
+import { getLoadingImagePool } from "../lib/detail-motion";
 
 interface LoadingScreenProps {
   mood: string;
@@ -138,11 +137,7 @@ const ProgressiveImage = React.memo(function ProgressiveImage({
         loading={loading}
         decoding="async"
         onLoad={() => setLoaded(true)}
-        onError={() => {
-          if (currentSrc !== imgAlbum) {
-            setCurrentSrc(imgAlbum);
-          }
-        }}
+        onError={() => setLoaded(false)}
         style={{
           ...style,
           opacity: loaded ? 1 : 0,
@@ -203,14 +198,9 @@ export function LoadingScreen({
 
   const maxTiles = profile.cols * profile.rows;
 
-  const effectiveImages = useMemo(
-    () => (imagesMood === mood ? images : []),
-    [images, imagesMood, mood]
-  );
-
   const baseImages = useMemo(
-    () => Array.from(new Set(effectiveImages.filter(Boolean))).sort(),
-    [effectiveImages]
+    () => getLoadingImagePool(images, imagesMood, mood),
+    [images, imagesMood, mood]
   );
 
   useEffect(() => {
@@ -246,13 +236,13 @@ export function LoadingScreen({
     gridDataRef.current.cols !== profile.cols ||
     gridDataRef.current.maxTiles !== maxTiles
   ) {
-    const basePool = frozenImages.length > 0 ? frozenImages : [imgAlbum];
+    const basePool = frozenImages;
 
     const shuffledBase = [...basePool].sort(() => Math.random() - 0.5);
     const expanded: string[] = [];
 
     for (let i = 0; i < maxTiles; i += 1) {
-      expanded.push(shuffledBase[i % shuffledBase.length]);
+      expanded.push(shuffledBase.length > 0 ? shuffledBase[i % shuffledBase.length] : "");
     }
 
     const chunked: string[][] = [];
@@ -261,10 +251,6 @@ export function LoadingScreen({
       if (row.length === 0) break;
       chunked.push(row);
       if (chunked.length >= profile.rows) break;
-    }
-
-    if (chunked.length === 0) {
-      chunked.push([imgAlbum]);
     }
 
     let heroRowIndex = 0;
@@ -299,7 +285,7 @@ export function LoadingScreen({
     setTileStates(() => {
       const next = new Map<number, { src: string; phase: 'idle' | 'shrinking' | 'growing' }>();
       for (let i = 0; i < totalTiles; i += 1) {
-        const src = imagePool.length > 0 ? imagePool[i % imagePool.length] : imgAlbum;
+        const src = imagePool.length > 0 ? imagePool[i % imagePool.length] : "";
         next.set(i, { src, phase: 'idle' });
       }
       return next;
@@ -406,7 +392,7 @@ export function LoadingScreen({
     if (state) return state;
     const src = imagePool.length > 0
       ? imagePool[tileIndex % imagePool.length]
-      : imgAlbum;
+      : "";
     return { src, phase: 'idle' };
   };
 
@@ -466,7 +452,7 @@ export function LoadingScreen({
                   colIndex === hero.colIndex;
 
                 if (isHero) {
-                  const heroSrc = getStableArtworkSource(highlightImageUrl, defaultSrc ?? imgAlbum);
+                  const heroSrc = highlightImageUrl ?? defaultSrc;
                   return (
                     <div
                       key={`hero-${rowIndex}-${colIndex}`}
@@ -485,13 +471,23 @@ export function LoadingScreen({
                           scale: { duration: 0.28, delay: 0.08 },
                         }}
                       >
-                        <ProgressiveImage
-                          key={heroSrc}
-                          src={heroSrc}
-                          alt="Featured album cover"
-                          className="absolute inset-0 max-w-none object-cover size-full"
-                          loading="eager"
-                        />
+                        {heroSrc ? (
+                          <ProgressiveImage
+                            key={heroSrc}
+                            src={heroSrc}
+                            alt="Featured album cover"
+                            className="absolute inset-0 max-w-none object-cover size-full"
+                            loading="eager"
+                          />
+                        ) : (
+                          <div
+                            className="absolute inset-0 rounded-full"
+                            style={{
+                              background: "rgba(255,255,255,0.08)",
+                              animation: "pulse 1.6s ease-in-out infinite",
+                            }}
+                          />
+                        )}
                       </motion.div>
                     </div>
                   );
@@ -519,12 +515,22 @@ export function LoadingScreen({
                             : 'none',
                       }}
                     >
-                      <ProgressiveImage
-                        src={tile.src}
-                        alt="Album cover art"
-                        className="absolute inset-0 max-w-none object-cover size-full"
-                        loading="lazy"
-                      />
+                      {tile.src ? (
+                        <ProgressiveImage
+                          src={tile.src}
+                          alt="Album cover art"
+                          className="absolute inset-0 max-w-none object-cover size-full"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div
+                          className="absolute inset-0 rounded-full"
+                          style={{
+                            background: "rgba(255,255,255,0.08)",
+                            animation: "pulse 1.6s ease-in-out infinite",
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                 );
