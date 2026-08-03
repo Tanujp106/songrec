@@ -29,8 +29,11 @@ test("defines complete canonical and social metadata in the homepage", () => {
   const canonicalTag = html.match(/<link[^>]+rel=["']canonical["'][^>]*>/i)?.[0];
 
   assert.equal(attribute(canonicalTag ?? "", "href"), `${siteUrl}/`);
+  assert.equal(html.match(/<title>([^<]+)<\/title>/i)?.[1], "Songrec | Mood-Based Music Recommendations");
+  assert.equal(metaContent(html, "description"), "Choose a mood, tune the popularity slider, and discover handpicked songs for every mood with Songrec.");
   assert.equal(metaContent(html, "og:type"), "website");
   assert.equal(metaContent(html, "og:url"), `${siteUrl}/`);
+  assert.equal(metaContent(html, "og:title"), "Songrec | Mood-Based Music Recommendations");
   assert.equal(metaContent(html, "og:image"), `${siteUrl}/og-image-mascot-static.png`);
   assert.equal(metaContent(html, "og:image:type"), "image/png");
   assert.equal(metaContent(html, "twitter:card"), "summary_large_image");
