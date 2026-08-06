@@ -18,32 +18,31 @@ import {
   getDiscoveryStackCycleState,
   type DiscoveryDeckTuning,
   type DiscoveryGesture,
+  type DiscoveryStackInteractionTuning,
   type DiscoveryStackCyclePhase,
 } from "../lib/discovery-deck";
-
-const STACK_SPRING = {
-  type: "spring" as const,
-  visualDuration: 0.18,
-  bounce: 0.025,
-};
 
 const CYCLE_LIFT_TRANSITION = {
   duration: 0.09,
   ease: [0.2, 0.8, 0.2, 1] as const,
 };
 
-const CYCLE_SETTLE_SPRING = {
-  type: "spring" as const,
-  visualDuration: 0.14,
-  bounce: 0.02,
-};
-
-const DRAG_RETURN_SPRING = {
-  type: "spring" as const,
-  stiffness: 300,
-  damping: 28,
-  mass: 0.8,
-};
+interface DiscoveryStackAnimationTuning {
+  stackSpring: {
+    visualDuration: number;
+    bounce: number;
+  };
+  cycleLiftDuration: number;
+  cycleSettleSpring: {
+    visualDuration: number;
+    bounce: number;
+  };
+  dragReturnSpring: {
+    stiffness: number;
+    damping: number;
+    mass: number;
+  };
+}
 
 interface PointerGesture {
   pointerId: number;
@@ -68,6 +67,8 @@ interface ElasticStackCardProps {
   onCycle: (direction: Exclude<DiscoveryGesture, null>) => void;
   shouldReduceMotion: boolean;
   swipeThresholdPx: number;
+  interactionTuning: DiscoveryStackInteractionTuning;
+  animationTuning: DiscoveryStackAnimationTuning;
 }
 
 function updatePointerVelocity(
@@ -94,6 +95,8 @@ function ElasticStackCard({
   onCycle,
   shouldReduceMotion,
   swipeThresholdPx,
+  interactionTuning,
+  animationTuning,
 }: ElasticStackCardProps) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -101,14 +104,14 @@ function ElasticStackCard({
 
   const returnToOrigin = useCallback((velocityX = 0, velocityY = 0) => {
     animateMotion(x, 0, {
-      ...DRAG_RETURN_SPRING,
+      ...animationTuning.dragReturnSpring,
       velocity: getDiscoveryArtworkReleaseVelocity(velocityX),
     });
     animateMotion(y, 0, {
-      ...DRAG_RETURN_SPRING,
+      ...animationTuning.dragReturnSpring,
       velocity: getDiscoveryArtworkReleaseVelocity(velocityY),
     });
-  }, [x, y]);
+  }, [animationTuning.dragReturnSpring, x, y]);
 
   const finishGesture = useCallback((
     event: ReactPointerEvent<HTMLDivElement>,
@@ -163,7 +166,7 @@ function ElasticStackCard({
         const deltaX = event.clientX - gesture.startX;
         const deltaY = event.clientY - gesture.startY;
         if (!shouldReduceMotion) {
-          const offset = getDiscoveryCardDragOffset(deltaX, deltaY);
+          const offset = getDiscoveryCardDragOffset(deltaX, deltaY, interactionTuning);
           x.set(offset.x);
           y.set(offset.y);
         }
@@ -199,6 +202,8 @@ export function DiscoveryCardStack({
   shouldReduceMotion,
   swipeThresholdPx,
   tuning,
+  interactionTuning,
+  animationTuning,
 }: {
   borderRadiusPx: number;
   cardInsetPercent: number;
@@ -211,6 +216,8 @@ export function DiscoveryCardStack({
   shouldReduceMotion: boolean;
   swipeThresholdPx: number;
   tuning: DiscoveryDeckTuning;
+  interactionTuning: DiscoveryStackInteractionTuning;
+  animationTuning: DiscoveryStackAnimationTuning;
 }) {
   const [cyclePhase, setCyclePhase] = useState<DiscoveryStackCyclePhase>("lift");
   const visibleOrder = order.length === items.length
@@ -244,15 +251,19 @@ export function DiscoveryCardStack({
               cyclePhase,
               state,
               items.length,
+              interactionTuning,
             )
           : state;
         const transition = shouldReduceMotion
           ? { duration: 0 }
           : isCyclingCard
             ? cyclePhase === "lift"
-              ? CYCLE_LIFT_TRANSITION
-              : CYCLE_SETTLE_SPRING
-            : STACK_SPRING;
+              ? {
+                  duration: animationTuning.cycleLiftDuration,
+                  ease: CYCLE_LIFT_TRANSITION.ease,
+                }
+              : animationTuning.cycleSettleSpring
+            : animationTuning.stackSpring;
 
         return (
           <motion.div
@@ -293,6 +304,8 @@ export function DiscoveryCardStack({
               onCycle={(direction) => onCycle(cardIndex, direction)}
               shouldReduceMotion={shouldReduceMotion}
               swipeThresholdPx={swipeThresholdPx}
+              interactionTuning={interactionTuning}
+              animationTuning={animationTuning}
             >
               <div
                 className="absolute inset-0 overflow-hidden"

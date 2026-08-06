@@ -1,6 +1,7 @@
 export const RESULT_CONTENT_REVEAL_DELAY_MS = 1300;
 export const RESULT_ACTION_HEIGHT = "clamp(44px, 6.4svh, 52px)";
 export const RESULT_ACTION_MAX_WIDTH = "min(100%, 560px)";
+export const RESULT_DETAIL_SIDE_PADDING = 24;
 export const RESULT_TOP_PADDING = "clamp(12px, 2.8svh, 24px)";
 export const RESULT_ACTION_BOTTOM_PADDING = "clamp(20px, 3.5svh, 32px)";
 export const RESULT_ACTION_TOP_GAP = "clamp(8px, 2svh, 20px)";

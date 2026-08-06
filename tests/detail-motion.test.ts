@@ -5,6 +5,7 @@ import {
   RESULT_ACTION_HEIGHT,
   RESULT_ACTION_MAX_WIDTH,
   RESULT_ACTION_BOTTOM_PADDING,
+  RESULT_DETAIL_SIDE_PADDING,
   RESULT_ACTION_TOP_GAP,
   RESULT_DETAIL_HEIGHT,
   RESULT_DISCOVERY_TOP_GAP,
@@ -25,6 +26,7 @@ test("waits for the album handoff before revealing result content", () => {
   assert.equal(RESULT_CONTENT_REVEAL_DELAY_MS, 1300);
   assert.equal(RESULT_ACTION_HEIGHT, "clamp(44px, 6.4svh, 52px)");
   assert.equal(RESULT_ACTION_MAX_WIDTH, "min(100%, 560px)");
+  assert.equal(RESULT_DETAIL_SIDE_PADDING, 24);
   assert.equal(RESULT_ACTION_BOTTOM_PADDING, "clamp(20px, 3.5svh, 32px)");
   assert.equal(RESULT_ACTION_TOP_GAP, "clamp(8px, 2svh, 20px)");
   assert.equal(RESULT_DETAIL_HEIGHT, "clamp(88px, 14svh, 120px)");

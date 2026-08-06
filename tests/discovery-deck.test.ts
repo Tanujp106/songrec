@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   DEFAULT_DISCOVERY_DECK_TUNING,
+  DEFAULT_DISCOVERY_STACK_INTERACTION_TUNING,
   DISCOVERY_CHAMBER_REVEAL_DELAY_MS,
   DISCOVERY_CHAMBER_HINT_DELAY_MS,
   DISCOVERY_CHAMBER_HINT_DURATION_MS,
@@ -289,6 +290,27 @@ test("uses caller-supplied gesture and stack tuning without changing defaults", 
     getDeckCardLayout(1, { ...DEFAULT_DISCOVERY_DECK_TUNING, stackX: 9 }),
     { x: -9, y: -3, rotate: -2.8, scale: 0.98, opacity: 0.9 },
   );
+});
+
+test("keeps stack interaction tuning explicit and adjustable", () => {
+  const tuning = {
+    ...DEFAULT_DISCOVERY_STACK_INTERACTION_TUNING,
+    cardDragMaxTravel: 12,
+    cardDragResistance: 2,
+    cycleLiftTravel: 32,
+    cycleLiftRotate: 8,
+  };
+
+  const offset = getDiscoveryCardDragOffset(240, 0, tuning);
+  assert.ok(offset.x > 11 && offset.x <= 12);
+  assert.deepEqual(getDiscoveryStackCycleState("next", "lift", getDeckCardLayout(3), 4, tuning), {
+    x: -32,
+    y: tuning.cycleLiftY,
+    rotate: -8,
+    scale: tuning.cycleLiftScale,
+    opacity: 1,
+    zIndex: 5,
+  });
 });
 
 test("enters finding once and returns to the cached deck on later visits", () => {

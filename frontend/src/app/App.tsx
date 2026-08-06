@@ -15,6 +15,7 @@ import { Agentation } from "agentation";
 import { Analytics } from "@vercel/analytics/react";
 import { MeasurementScripts } from "./components/MeasurementScripts";
 import { createRequestGuard } from "./lib/request-guard";
+import { DialRoot } from "dialkit";
 
 const RESULT_ACTION_INSET_PX = 24;
 const DEFAULT_FROM = "#5A54F2";
@@ -422,6 +423,9 @@ export default function App() {
       </main>
       <Analytics />
       <MeasurementScripts />
+      {import.meta.env.DEV ? (
+        <DialRoot position="top-right" defaultOpen theme="dark" />
+      ) : null}
     </div>
   );
 }

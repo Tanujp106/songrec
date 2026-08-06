@@ -27,12 +27,44 @@ export interface DiscoveryDeckTuning {
   stackOpacityStep: number;
 }
 
+export interface DiscoveryStackInteractionTuning {
+  cardDragMaxTravel: number;
+  cardDragResistance: number;
+  cycleLiftTravel: number;
+  cycleLiftY: number;
+  cycleLiftRotate: number;
+  cycleLiftScale: number;
+}
+
+export interface DiscoveryChamberHintTuning {
+  travelPx: number;
+  delayMs: number;
+  durationMs: number;
+  intervalMs: number;
+}
+
 export const DEFAULT_DISCOVERY_DECK_TUNING: DiscoveryDeckTuning = {
   stackX: 4,
   stackY: 3,
   stackRotate: 2.8,
   stackScaleStep: 0.02,
   stackOpacityStep: 0.1,
+};
+
+export const DEFAULT_DISCOVERY_STACK_INTERACTION_TUNING: DiscoveryStackInteractionTuning = {
+  cardDragMaxTravel: DISCOVERY_DRAG_MAX_TRAVEL_PX,
+  cardDragResistance: DISCOVERY_ARTWORK_DRAG_RESISTANCE,
+  cycleLiftTravel: 24,
+  cycleLiftY: 2,
+  cycleLiftRotate: 5,
+  cycleLiftScale: 0.985,
+};
+
+export const DEFAULT_DISCOVERY_CHAMBER_HINT_TUNING: DiscoveryChamberHintTuning = {
+  travelPx: DISCOVERY_CHAMBER_HINT_TRAVEL_PX,
+  delayMs: DISCOVERY_CHAMBER_HINT_DELAY_MS,
+  durationMs: DISCOVERY_CHAMBER_HINT_DURATION_MS,
+  intervalMs: DISCOVERY_CHAMBER_HINT_INTERVAL_MS,
 };
 
 export type DiscoveryView = "primary" | "finding" | "deck";
@@ -43,16 +75,17 @@ export type DiscoveryStackCyclePhase = "lift" | "settle";
 export function getDiscoveryChamberHintMotion(
   reducedMotion: boolean,
   isPrimary: boolean,
+  tuning: DiscoveryChamberHintTuning = DEFAULT_DISCOVERY_CHAMBER_HINT_TUNING,
 ) {
   if (reducedMotion || !isPrimary) return { x: 0 };
 
   return {
-    x: [0, -DISCOVERY_CHAMBER_HINT_TRAVEL_PX, 0],
+    x: [0, -tuning.travelPx, 0],
     transition: {
-      duration: DISCOVERY_CHAMBER_HINT_DURATION_MS / 1000,
-      delay: DISCOVERY_CHAMBER_HINT_DELAY_MS / 1000,
+      duration: tuning.durationMs / 1000,
+      delay: tuning.delayMs / 1000,
       repeat: Infinity,
-      repeatDelay: (DISCOVERY_CHAMBER_HINT_INTERVAL_MS - DISCOVERY_CHAMBER_HINT_DURATION_MS) / 1000,
+      repeatDelay: Math.max(0, tuning.intervalMs - tuning.durationMs) / 1000,
       ease: "easeInOut" as const,
       times: [0, 0.42, 1],
     },
@@ -261,8 +294,15 @@ export function getDiscoveryArtworkDragOffset(
 export function getDiscoveryCardDragOffset(
   deltaX: number,
   deltaY: number,
+  tuning: DiscoveryStackInteractionTuning = DEFAULT_DISCOVERY_STACK_INTERACTION_TUNING,
 ): DiscoveryDragOffset {
-  return getDiscoveryArtworkDragOffset(deltaX, deltaY);
+  return getDiscoveryDragOffset(
+    deltaX,
+    deltaY,
+    tuning.cardDragMaxTravel,
+    tuning.cardDragMaxTravel,
+    tuning.cardDragResistance,
+  );
 }
 
 export function getDiscoveryArtworkScale(
@@ -399,6 +439,7 @@ export function getDiscoveryStackCycleState(
   phase: DiscoveryStackCyclePhase,
   backLayout: DeckCardLayout,
   cardCount: number,
+  tuning: DiscoveryStackInteractionTuning = DEFAULT_DISCOVERY_STACK_INTERACTION_TUNING,
 ): DiscoveryStackCycleState {
   if (phase === "settle") {
     return {
@@ -410,10 +451,10 @@ export function getDiscoveryStackCycleState(
 
   const side = direction === "previous" ? 1 : -1;
   return {
-    x: side * 24,
-    y: 2,
-    rotate: side * 5,
-    scale: 0.985,
+    x: side * tuning.cycleLiftTravel,
+    y: tuning.cycleLiftY,
+    rotate: side * tuning.cycleLiftRotate,
+    scale: tuning.cycleLiftScale,
     opacity: 1,
     zIndex: Math.max(1, cardCount + 1),
   };

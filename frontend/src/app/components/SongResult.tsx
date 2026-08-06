@@ -14,6 +14,7 @@ import {
   useMotionValue,
   useReducedMotion,
 } from "motion/react";
+import { useDialKit } from "dialkit";
 import svgPaths from "../../imports/svg-iturtluduq";
 import imgAlbum from "@/assets/256b80c8e3feddbc7d9121f96f8a5007c5f523ae.png";
 import type { SongRecommendation } from "../lib/api";
@@ -46,6 +47,7 @@ import { DiscoveryCardStack } from "./DiscoveryCardStack";
 import {
   RESULT_ACTION_HEIGHT,
   RESULT_ACTION_MAX_WIDTH,
+  RESULT_DETAIL_SIDE_PADDING,
   RESULT_TOP_PADDING,
   RESULT_ACTION_BOTTOM_PADDING,
   RESULT_ACTION_TOP_GAP,
@@ -63,33 +65,18 @@ const RESULT_MAX_WIDTH = "min(100%, 1120px)";
 const DISCOVERY_SIDE_PADDING_PX = 24;
 const DISCOVERY_RADIUS_PX = 24;
 const DISCOVERY_CARD_INSET_PERCENT = 12;
-const DISCOVERY_CHAMBER_PEEK_PX = 20;
-const DISCOVERY_FINDING_DURATION_MS = 2500;
-const DISCOVERY_MORPH_PREP_DURATION_MS = 300;
-const DISCOVERY_MORPH_HANDOFF_DURATION_MS = 560;
-const DISCOVERY_PANEL_SPRING = {
-  type: "spring" as const,
-  stiffness: 190,
-  damping: 38,
-  mass: 1,
-};
-const DISCOVERY_STACK_TUNING = {
-  x: 8,
-  y: 4,
-  rotate: 7,
-  scaleStep: 0.02,
-  opacityStep: 0,
-};
-const DISCOVERY_SWIPE_THRESHOLD_PX = 36;
-const DISCOVERY_ARTWORK_RETURN_SPRING = {
-  type: "spring" as const,
-  stiffness: 300,
-  damping: 28,
-  mass: 0.8,
-};
 const DISCOVERY_ARTWORK_EDGE_GAP_PX = 4;
 const DISCOVERY_ARTWORK_INSET_PX =
   DISCOVERY_ARTWORK_EDGE_GAP_PX + DISCOVERY_ARTWORK_DRAG_MAX_TRAVEL_PX;
+
+interface DialSpring {
+  type: "spring";
+  stiffness?: number;
+  damping?: number;
+  mass?: number;
+  visualDuration?: number;
+  bounce?: number;
+}
 
 interface SongResultProps {
   mood: string;
@@ -290,6 +277,80 @@ export function SongResult({
 }: SongResultProps) {
   const cardSize = RESULT_CARD_SIZE;
   const shouldReduceMotion = useReducedMotion() ?? false;
+  const mainSongDial = useDialKit(
+    "Main song to suggestions",
+    {
+      swipeThresholdPx: [24, 16, 120, 1],
+      chamberPeekPx: [12, 0, 80, 1],
+      findingDurationMs: [2800, 1000, 5000, 50],
+      morphPrepDurationMs: [140, 0, 1000, 10],
+      morphHandoffDurationMs: [350, 100, 1500, 10],
+      panelSpring: {
+        type: "spring" as const,
+        stiffness: 260,
+        damping: 34,
+        mass: 1,
+      },
+      artworkReturnSpring: {
+        type: "spring" as const,
+        stiffness: 280,
+        damping: 27,
+        mass: 0.6,
+      },
+      chamberHint: {
+        _collapsed: true,
+        travelPx: [8, 0, 40, 1],
+        delayMs: [800, 0, 2000, 50],
+        durationMs: [550, 100, 2000, 50],
+        intervalMs: [2700, 1000, 8000, 100],
+      },
+    },
+    { persist: true },
+  );
+  const stackDial = useDialKit(
+    "Suggestion card stack",
+    {
+      swipeThresholdPx: [36, 16, 120, 1],
+      stack: {
+        _collapsed: true,
+        x: [8, 0, 24, 1],
+        y: [4, 0, 24, 1],
+        rotate: [7, 0, 20, 0.5],
+        scaleStep: [0.02, 0, 0.1, 0.005],
+        opacityStep: [0, 0, 0.3, 0.01],
+      },
+      drag: {
+        _collapsed: true,
+        maxTravel: [3, 0, 24, 0.5],
+        resistance: [6, 1, 16, 0.25],
+      },
+      cycle: {
+        _collapsed: true,
+        liftTravel: [24, 0, 80, 1],
+        liftY: [2, -20, 20, 1],
+        liftRotate: [5, 0, 20, 0.5],
+        liftScale: [0.985, 0.8, 1, 0.005],
+        liftDuration: [0.09, 0.03, 0.5, 0.01],
+        settleSpring: {
+          type: "spring" as const,
+          visualDuration: 0.14,
+          bounce: 0.02,
+        },
+      },
+      stackSpring: {
+        type: "spring" as const,
+        visualDuration: 0.18,
+        bounce: 0.025,
+      },
+      dragReturnSpring: {
+        type: "spring" as const,
+        stiffness: 300,
+        damping: 28,
+        mass: 0.8,
+      },
+    },
+    { persist: true },
+  );
   const detailMotion = getSongDetailMotion(shouldReduceMotion);
   const resultContentMotion = getResultContentMotion(shouldReduceMotion);
   const discoverySongs = getDiscoverySongs(songs);
@@ -319,6 +380,18 @@ export function SongResult({
     }
   }, []);
 
+  const panelSpring = mainSongDial.panelSpring as DialSpring;
+  const artworkReturnSpring = mainSongDial.artworkReturnSpring as DialSpring;
+  const stackSpring = stackDial.stackSpring as DialSpring;
+  const settleSpring = stackDial.cycle.settleSpring as DialSpring;
+  const dragReturnSpring = stackDial.dragReturnSpring as DialSpring;
+  const discoveryArtworkReturnSpring = {
+    type: "spring" as const,
+    stiffness: artworkReturnSpring.stiffness ?? 300,
+    damping: artworkReturnSpring.damping ?? 28,
+    mass: artworkReturnSpring.mass ?? 0.8,
+  };
+
   const resetPrimaryArtworkDrag = useCallback((velocityX = 0, velocityY = 0) => {
     if (shouldReduceMotion) {
       primaryArtworkDragX.set(0);
@@ -328,15 +401,15 @@ export function SongResult({
     }
 
     animateMotion(primaryArtworkDragX, 0, {
-      ...DISCOVERY_ARTWORK_RETURN_SPRING,
+      ...discoveryArtworkReturnSpring,
       velocity: getDiscoveryArtworkReleaseVelocity(velocityX),
     });
     animateMotion(primaryArtworkDragY, 0, {
-      ...DISCOVERY_ARTWORK_RETURN_SPRING,
+      ...discoveryArtworkReturnSpring,
       velocity: getDiscoveryArtworkReleaseVelocity(velocityY),
     });
-    animateMotion(primaryArtworkDragScale, 1, DISCOVERY_ARTWORK_RETURN_SPRING);
-  }, [primaryArtworkDragScale, primaryArtworkDragX, primaryArtworkDragY, shouldReduceMotion]);
+    animateMotion(primaryArtworkDragScale, 1, discoveryArtworkReturnSpring);
+  }, [discoveryArtworkReturnSpring, primaryArtworkDragScale, primaryArtworkDragX, primaryArtworkDragY, shouldReduceMotion]);
 
   const visibleDeckOrder = deckOrder.length === discoverySongs.length
     ? deckOrder
@@ -355,7 +428,46 @@ export function SongResult({
   const isDeck = deckState.view === "deck";
   const showFinding = isFinding || isDiscoveryMorphing;
   const hasDiscovery = discoverySongs.length > 0;
-  const chamberHintMotion = getDiscoveryChamberHintMotion(shouldReduceMotion, isPrimary);
+  const findingDurationMs = mainSongDial.findingDurationMs;
+  const morphPrepDurationMs = mainSongDial.morphPrepDurationMs;
+  const morphHandoffDurationMs = mainSongDial.morphHandoffDurationMs;
+  const chamberHintMotion = getDiscoveryChamberHintMotion(shouldReduceMotion, isPrimary, {
+    travelPx: mainSongDial.chamberHint.travelPx,
+    delayMs: mainSongDial.chamberHint.delayMs,
+    durationMs: mainSongDial.chamberHint.durationMs,
+    intervalMs: mainSongDial.chamberHint.intervalMs,
+  });
+  const discoveryStackTuning = {
+    stackX: stackDial.stack.x,
+    stackY: stackDial.stack.y,
+    stackRotate: stackDial.stack.rotate,
+    stackScaleStep: stackDial.stack.scaleStep,
+    stackOpacityStep: stackDial.stack.opacityStep,
+  };
+  const discoveryStackInteractionTuning = {
+    cardDragMaxTravel: stackDial.drag.maxTravel,
+    cardDragResistance: stackDial.drag.resistance,
+    cycleLiftTravel: stackDial.cycle.liftTravel,
+    cycleLiftY: stackDial.cycle.liftY,
+    cycleLiftRotate: stackDial.cycle.liftRotate,
+    cycleLiftScale: stackDial.cycle.liftScale,
+  };
+  const discoveryStackAnimationTuning = {
+    stackSpring: {
+      visualDuration: stackSpring.visualDuration ?? 0.18,
+      bounce: stackSpring.bounce ?? 0.025,
+    },
+    cycleLiftDuration: stackDial.cycle.liftDuration,
+    cycleSettleSpring: {
+      visualDuration: settleSpring.visualDuration ?? 0.14,
+      bounce: settleSpring.bounce ?? 0.02,
+    },
+    dragReturnSpring: {
+      stiffness: dragReturnSpring.stiffness ?? 300,
+      damping: dragReturnSpring.damping ?? 28,
+      mass: dragReturnSpring.mass ?? 0.8,
+    },
+  };
   const description = isPrimary
     ? "Here's a perfect " + mood + " song for you"
     : "More " + mood + " songs you might like";
@@ -375,17 +487,17 @@ export function SongResult({
     if (!isFinding || shouldReduceMotion) return;
     const timer = window.setTimeout(() => {
       setIsDiscoveryMorphing(true);
-    }, Math.max(0, DISCOVERY_FINDING_DURATION_MS - DISCOVERY_MORPH_PREP_DURATION_MS));
+    }, Math.max(0, findingDurationMs - morphPrepDurationMs));
     return () => window.clearTimeout(timer);
-  }, [discoverySongs.length, isFinding, shouldReduceMotion]);
+  }, [discoverySongs.length, findingDurationMs, isFinding, morphPrepDurationMs, shouldReduceMotion]);
 
   useEffect(() => {
     if (!isDiscoveryMorphing || isFinding || shouldReduceMotion) return;
     const timer = window.setTimeout(() => {
       setIsDiscoveryMorphing(false);
-    }, DISCOVERY_MORPH_HANDOFF_DURATION_MS);
+    }, morphHandoffDurationMs);
     return () => window.clearTimeout(timer);
-  }, [isDiscoveryMorphing, isFinding, shouldReduceMotion]);
+  }, [isDiscoveryMorphing, isFinding, morphHandoffDurationMs, shouldReduceMotion]);
 
   useLayoutEffect(() => {
     if (!isDiscoveryMorphing || shouldReduceMotion) {
@@ -449,9 +561,9 @@ export function SongResult({
     if (!isFinding) return;
     const timer = window.setTimeout(() => {
       setDeckState((state) => finishDiscovery(state, discoverySongs.length));
-    }, DISCOVERY_FINDING_DURATION_MS);
+    }, findingDurationMs);
     return () => window.clearTimeout(timer);
-  }, [discoverySongs.length, isFinding]);
+  }, [discoverySongs.length, findingDurationMs, isFinding]);
 
   const sendCardToBackImmediately = useCallback((cardIndex: number) => {
     const nextOrder = sendDiscoveryCardToBack(visibleDeckOrder, cardIndex);
@@ -590,7 +702,7 @@ export function SongResult({
       endX: event.clientX,
       startY: gesture.startY,
       endY: event.clientY,
-    }, DISCOVERY_SWIPE_THRESHOLD_PX);
+    }, isDeck ? stackDial.swipeThresholdPx : mainSongDial.swipeThresholdPx);
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -599,7 +711,13 @@ export function SongResult({
     // The active card owns in-stack gestures and stops propagation. Any deck
     // gesture that reaches this parent began in the exposed border area.
     commitGesture(direction, isDeck ? false : gesture.startsInsideChamber);
-  }, [commitGesture, isDeck, resetGesture]);
+  }, [
+    commitGesture,
+    isDeck,
+    mainSongDial.swipeThresholdPx,
+    resetGesture,
+    stackDial.swipeThresholdPx,
+  ]);
 
   const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowRight") {
@@ -696,7 +814,7 @@ export function SongResult({
                   opacity: isPrimary ? 1 : 0.35,
                   scale: isPrimary ? 1 : 0.96,
                 }}
-                transition={shouldReduceMotion ? { duration: 0 } : DISCOVERY_PANEL_SPRING}
+                transition={shouldReduceMotion ? { duration: 0 } : panelSpring}
                 style={{ width: cardSize, willChange: "transform" }}
               >
                 <motion.div
@@ -736,7 +854,7 @@ export function SongResult({
                   opacity: 0,
                 }}
                 animate={{
-                  left: isPrimary ? "calc(100% - " + DISCOVERY_CHAMBER_PEEK_PX + "px)" : "50%",
+                  left: isPrimary ? "calc(100% - " + mainSongDial.chamberPeekPx + "px)" : "50%",
                   x: isPrimary ? chamberHintMotion.x : "-50%",
                   opacity: 1,
                 }}
@@ -745,11 +863,11 @@ export function SongResult({
                     ? { duration: 0 }
                     : isPrimary
                       ? {
-                          left: DISCOVERY_PANEL_SPRING,
+                          left: panelSpring,
                           default: chamberHintMotion.transition,
                           opacity: { duration: 0.18, ease: "easeOut" },
                         }
-                      : DISCOVERY_PANEL_SPRING
+                      : panelSpring
                 }
                 style={{
                   width: cardSize,
@@ -790,13 +908,7 @@ export function SongResult({
                         if (!source) return null;
 
                         const position = visibleDeckOrder.indexOf(index);
-                        const layout = getDeckCardLayout(position, {
-                          stackX: DISCOVERY_STACK_TUNING.x,
-                          stackY: DISCOVERY_STACK_TUNING.y,
-                          stackRotate: DISCOVERY_STACK_TUNING.rotate,
-                          stackScaleStep: DISCOVERY_STACK_TUNING.scaleStep,
-                          stackOpacityStep: DISCOVERY_STACK_TUNING.opacityStep,
-                        });
+                        const layout = getDeckCardLayout(position, discoveryStackTuning);
                         const target = getDiscoveryMorphTargetFrame(
                           layout,
                           morphCapture.chamberWidth,
@@ -829,7 +941,7 @@ export function SongResult({
                               borderRadius: DISCOVERY_RADIUS_PX,
                             }}
                             transition={{
-                              duration: DISCOVERY_MORPH_HANDOFF_DURATION_MS / 1000,
+                              duration: morphHandoffDurationMs / 1000,
                               ease: "easeInOut",
                             }}
                             style={{
@@ -865,14 +977,10 @@ export function SongResult({
                       onCycleComplete={completeDeckCycle}
                       order={visibleDeckOrder}
                       shouldReduceMotion={shouldReduceMotion}
-                      swipeThresholdPx={DISCOVERY_SWIPE_THRESHOLD_PX}
-                      tuning={{
-                        stackX: DISCOVERY_STACK_TUNING.x,
-                        stackY: DISCOVERY_STACK_TUNING.y,
-                        stackRotate: DISCOVERY_STACK_TUNING.rotate,
-                        stackScaleStep: DISCOVERY_STACK_TUNING.scaleStep,
-                        stackOpacityStep: DISCOVERY_STACK_TUNING.opacityStep,
-                      }}
+                      swipeThresholdPx={stackDial.swipeThresholdPx}
+                      tuning={discoveryStackTuning}
+                      interactionTuning={discoveryStackInteractionTuning}
+                      animationTuning={discoveryStackAnimationTuning}
                     />
                   )}
                 </AnimatePresence>
@@ -882,7 +990,7 @@ export function SongResult({
 
           <motion.div
             aria-live="polite"
-            className="relative w-full px-[24px]"
+            className="relative w-full"
             data-slot="result-details"
             style={{ height: RESULT_DETAIL_HEIGHT }}
             initial={resultContentMotion.initial}
@@ -893,8 +1001,8 @@ export function SongResult({
               {showFinding ? (
                 <motion.div
                   key="finding-copy"
-                  className="absolute inset-x-0 top-0 flex w-full flex-col items-center"
-                  style={{ gap: RESULT_DETAIL_GAP }}
+                  className="absolute top-0 flex flex-col items-center"
+                  style={{ left: RESULT_DETAIL_SIDE_PADDING, right: RESULT_DETAIL_SIDE_PADDING, gap: RESULT_DETAIL_GAP }}
                   initial={detailMotion.initial}
                   animate={detailMotion.animate}
                   exit={detailMotion.exit}
@@ -919,8 +1027,8 @@ export function SongResult({
               ) : (
                 <motion.div
                   key={activeSongKey}
-                  className="absolute inset-x-0 top-0 flex w-full flex-col items-center"
-                  style={{ gap: RESULT_DETAIL_GAP }}
+                  className="absolute top-0 flex flex-col items-center"
+                  style={{ left: RESULT_DETAIL_SIDE_PADDING, right: RESULT_DETAIL_SIDE_PADDING, gap: RESULT_DETAIL_GAP }}
                   initial={detailMotion.initial}
                   animate={detailMotion.animate}
                   exit={detailMotion.exit}
